@@ -1,0 +1,26 @@
+{
+  "appId": "com.bokfontein.app",
+  "appName": "BOKFONTEIN",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 3000,
+      "launchAutoHide": true,
+      "backgroundColor": "#004d3d",
+      "androidSplashResourceName": "splash",
+      "androidScaleType": "CENTER_CROP",
+      "showSpinner": true,
+      "androidSpinnerStyle": "large",
+      "iosSpinnerStyle": "small",
+      "spinnerColor": "#fdb913"
+    },
+    "StatusBar": {
+      "style": "DARK",
+      "backgroundColor": "#004d3d"
+    }
+  }
+}

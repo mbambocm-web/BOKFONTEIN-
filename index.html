@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>BOKFONTEIN</title>
+    
+    <!-- Mobile App Capability -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#004d3d">
+    <link rel="manifest" href="/manifest.json">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Hanken+Grotesk:wght@300;400;500;600;700;800;900&family=Outfit:wght@900&display=swap" rel="stylesheet">
+    <style>
+      :root {
+        --bok-green: #004d3d;
+        --bok-gold: #fdb913;
+        --bok-gold-light: #ffce54;
+        --surface: #ffffff;
+        --background: #f8fafc; 
+        
+        /* Safe Area Padding for Notches */
+        --safe-area-top: env(safe-area-inset-top, 0px);
+        --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+      }
+
+      body {
+        font-family: 'Hanken Grotesk', sans-serif;
+        background-color: var(--background);
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        color: #0f172a;
+        padding-top: var(--safe-area-top);
+        padding-bottom: var(--safe-area-bottom);
+      }
+
+      h1, h2, h3, h4, .font-heading {
+        font-family: 'Syne', sans-serif;
+        letter-spacing: -0.04em;
+        text-transform: uppercase;
+      }
+
+      .font-logo {
+        font-family: 'Outfit', sans-serif;
+        font-weight: 900;
+        letter-spacing: -0.04em;
+        text-transform: uppercase;
+      }
+
+      /* Premium Custom Scrollbar */
+      ::-webkit-scrollbar {
+        width: 5px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 20px;
+      }
+
+      @keyframes slideUp {
+        from { opacity: 0; transform: translateY(30px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+
+      @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+
+      @keyframes scaleIn {
+        from { opacity: 0; transform: scale(0.92); }
+        to { opacity: 1; transform: scale(1); }
+      }
+
+      @keyframes float {
+        0% { transform: translateY(0px); }
+        50% { transform: translateY(-10px); }
+        100% { transform: translateY(0px); }
+      }
+
+      .animate-slideUp { animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+      .animate-fadeIn { animation: fadeIn 0.5s ease-out forwards; }
+      .animate-scaleIn { animation: scaleIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+      .animate-float { animation: float 4s ease-in-out infinite; }
+
+      .glass-premium {
+        background: rgba(255, 255, 255, 0.85);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.4);
+      }
+
+      .shadow-soft {
+        box-shadow: 0 20px 40px -15px rgba(0, 77, 61, 0.08);
+      }
+
+      .shadow-luxury {
+        box-shadow: 0 30px 60px -12px rgba(0, 0, 0, 0.15), 0 18px 36px -18px rgba(0, 0, 0, 0.1);
+      }
+
+      /* Tap Highlights & Tactile Feedback */
+      * {
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      .active-scale:active {
+        transform: scale(0.96);
+      }
+
+      input, button {
+        outline: none !important;
+      }
+
+      /* Logo Shimmer Effect */
+      .logo-shimmer {
+        background: linear-gradient(90deg, #fff 0%, #fdb913 50%, #fff 100%);
+        background-size: 200% auto;
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        animation: shimmer 4s linear infinite;
+      }
+
+      @keyframes shimmer {
+        to { background-position: 200% center; }
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@^19.2.3",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "@google/genai": "https://esm.sh/@google/genai@^1.34.0",
+    "lucide-react": "https://esm.sh/lucide-react@^0.562.0"
+  }
+}
+</script>
+</head>
+  <body class="h-full overflow-hidden">
+    <div id="root"></div>
+  </body>
+</html>

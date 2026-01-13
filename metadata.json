@@ -1,0 +1,9 @@
+{
+  "name": "BOKFONTEIN - Ultimate Fan Experience",
+  "description": "The official experience for the Springbok diaspora. Manage your match-day journeys, digital fan wallet, and connect with the global green and gold community through BOKFONTEIN's elite concierge and fan tools.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ]
+}

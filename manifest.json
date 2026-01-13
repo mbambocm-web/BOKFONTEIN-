@@ -1,0 +1,23 @@
+{
+  "name": "BOKFONTEIN - Ultimate Fan Experience",
+  "short_name": "BOKFONTEIN",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#004d3d",
+  "theme_color": "#004d3d",
+  "orientation": "portrait",
+  "description": "The elite portal for the global Springbok community.",
+  "icons": [
+    {
+      "src": "https://images.unsplash.com/photo-1541252260730-0412e8e2108e?q=80&w=192&h=192&auto=format&fit=crop",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://images.unsplash.com/photo-1541252260730-0412e8e2108e?q=80&w=512&h=512&auto=format&fit=crop",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
