@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Plane, Globe, ShieldCheck, User } from 'lucide-react';
 
@@ -98,7 +97,7 @@ const Landing: React.FC<LandingProps> = ({ onAuth }) => {
         <div className="flex-grow min-h-[40px]"></div>
 
         <div className="flex flex-col items-center flex-none">
-          <p className="text-white/10 text-[7px] uppercase font-bold tracking-[0.6em]">
+          <p className="text-[#fdb913]/40 text-[7px] uppercase font-bold tracking-[0.6em]">
             © SPORTS TRAVEL EXPERIENCES 2026
           </p>
         </div>

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Home, Compass, Users, User, Wallet, Bell, X, Check, MapPin, ShieldAlert, Zap, RefreshCcw, WifiOff } from 'lucide-react';
+import { Home, Compass, Users, User, Wallet, Bell, X, Check, MapPin, ShieldAlert, Zap, RefreshCcw, WifiOff, Loader2 } from 'lucide-react';
 import { AppTab, AppNotification } from '../types';
 import { native } from '../services/nativeService';
 import { db } from '../services/db';
@@ -27,6 +27,9 @@ const Layout: React.FC<LayoutProps> = ({
   const [showNotifications, setShowNotifications] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [userLocation, setUserLocation] = useState<string>("Detecting...");
+  const [isLocating, setIsLocating] = useState(true);
+
   const unreadCount = notifications.filter(n => !n.read).length;
 
   useEffect(() => {
@@ -34,11 +37,51 @@ const Layout: React.FC<LayoutProps> = ({
     const handleOffline = () => setIsOnline(false);
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
+    
+    // Attempt to detect location
+    detectLocation();
+
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
   }, []);
+
+  const detectLocation = () => {
+    if ("geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          try {
+            const { latitude, longitude } = position.coords;
+            // Use OpenStreetMap Nominatim for free reverse geocoding
+            const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=10&addressdetails=1`, {
+              headers: { 'Accept-Language': 'en' }
+            });
+            const data = await response.json();
+            
+            const city = data.address.city || data.address.town || data.address.village || data.address.suburb || "Unknown City";
+            const countryCode = data.address.country_code?.toUpperCase() || "ZA";
+            
+            setUserLocation(`${city}, ${countryCode}`);
+          } catch (error) {
+            console.error("Location lookup failed", error);
+            setUserLocation("Mzansi, ZA"); // Authentic fallback
+          } finally {
+            setIsLocating(false);
+          }
+        },
+        (error) => {
+          console.error("Geolocation error", error);
+          setUserLocation("Cape Town, ZA"); // Premium fallback
+          setIsLocating(false);
+        },
+        { timeout: 10000 }
+      );
+    } else {
+      setUserLocation("Global Hub");
+      setIsLocating(false);
+    }
+  };
 
   useEffect(() => {
     setIsSyncing(true);
@@ -96,7 +139,12 @@ const Layout: React.FC<LayoutProps> = ({
             <div className="animate-fadeIn overflow-hidden">
               <div className="flex items-center space-x-2">
                 <p className="text-[8px] font-black text-[#fdb913] uppercase tracking-widest flex items-center">
-                  <MapPin size={10} className="mr-1" strokeWidth={3} /> Brisbane, AU
+                  {isLocating ? (
+                    <RefreshCcw size={10} className="mr-1 animate-spin" />
+                  ) : (
+                    <MapPin size={10} className="mr-1" strokeWidth={3} />
+                  )}
+                  {userLocation}
                 </p>
               </div>
               <h1 className="text-sm font-black text-[#004d3d] uppercase tracking-tight flex items-center truncate">
@@ -139,7 +187,6 @@ const Layout: React.FC<LayoutProps> = ({
                     <div className="flex justify-between items-start mb-3">
                       <h4 className="text-sm font-black text-[#004d3d] uppercase tracking-tight">{n.title}</h4>
                       {!n.read && (
-                        /* Fixed: Use n.id instead of non-existent id */
                         <button onClick={() => onMarkRead(n.id)} className="text-[#fdb913] p-1 bg-[#fdb913]/10 rounded-lg">
                           <Check size={16} strokeWidth={4} />
                         </button>

@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useMemo } from 'react';
 import { 
   Settings, Shield, Award, HelpCircle, LogOut, ChevronRight, Share2, 
@@ -8,6 +9,7 @@ import {
 } from 'lucide-react';
 import { Member, Experience, Reward } from '../types';
 import { native } from '../services/nativeService';
+import { db } from '../services/db';
 
 interface ExperienceItem {
   id: string;
@@ -64,6 +66,7 @@ const Profile: React.FC<ProfileProps> = ({
 
   // Safety State
   const [showSafetyModal, setShowSafetyModal] = useState(false);
+  const [showMechanicsModal, setShowMechanicsModal] = useState(false);
 
   // Preferences State
   const [prefs, setPrefs] = useState({
@@ -109,6 +112,16 @@ const Profile: React.FC<ProfileProps> = ({
     if (currentUser.geesLevel > 5) return 1.5;
     return 1.0;
   }, [currentUser.geesLevel]);
+
+  const xpToNextLevel = useMemo(() => {
+    const nextLevelXP = currentUser.geesLevel * 500;
+    const currentLevelXP = (currentUser.geesLevel - 1) * 500;
+    const progress = currentUser.geesXP - currentLevelXP;
+    return {
+      progress: (progress / 500) * 100,
+      needed: 500 - progress
+    };
+  }, [currentUser.geesXP, currentUser.geesLevel]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -156,6 +169,8 @@ const Profile: React.FC<ProfileProps> = ({
     }
 
     onUpdateBalance(-totalCost);
+    db.processActivity(currentUser.id, 'purchase');
+    
     setMyExperiences(prev => prev.map(exp => 
       exp.id === selectedForPurchase.id ? { ...exp, status: 'Purchased' } : exp
     ));
@@ -200,9 +215,12 @@ const Profile: React.FC<ProfileProps> = ({
 
       {/* Fan Stats Section */}
       <div className="grid grid-cols-3 gap-3 px-1">
-        <div className="bg-white p-4 rounded-[24px] border border-slate-100 shadow-soft flex flex-col items-center justify-between text-center min-h-[110px] relative overflow-hidden">
+        <button 
+          onClick={() => { setShowMechanicsModal(true); native.hapticImpact(); }}
+          className="bg-white p-4 rounded-[24px] border border-slate-100 shadow-soft flex flex-col items-center justify-between text-center min-h-[110px] relative overflow-hidden active:scale-95 transition-all"
+        >
           <div className="absolute top-0 left-0 h-1 bg-orange-100 w-full">
-            <div className="h-full bg-orange-400" style={{ width: `${(currentUser.geesXP % 500) / 5}%` }}></div>
+            <div className="h-full bg-orange-400" style={{ width: `${xpToNextLevel.progress}%` }}></div>
           </div>
           <div className="p-2 bg-orange-50 text-orange-500 rounded-xl mb-1 relative">
             <Flame size={18} fill="currentColor" />
@@ -216,7 +234,7 @@ const Profile: React.FC<ProfileProps> = ({
             <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Gees</p>
             <p className="text-sm font-black text-[#004d3d]">LV. {currentUser.geesLevel}</p>
           </div>
-        </div>
+        </button>
         <div className="bg-[#fdb913] p-4 rounded-[24px] shadow-lg flex flex-col items-center justify-between text-center min-h-[110px] text-[#004d3d]">
           <div className="p-2 bg-white/20 rounded-xl mb-1">
             <Zap size={18} fill="currentColor" />
@@ -236,6 +254,50 @@ const Profile: React.FC<ProfileProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Gees Mechanics Modal */}
+      {showMechanicsModal && (
+        <div className="fixed inset-0 z-[11000] bg-black/60 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-white w-full max-w-sm rounded-[40px] p-8 animate-scaleIn relative shadow-luxury overflow-y-auto max-h-[85vh] no-scrollbar">
+            <button onClick={() => setShowMechanicsModal(false)} className="absolute top-6 right-6 text-slate-300 p-2"><X size={24} /></button>
+            <div className="flex items-center space-x-3 mb-6">
+               <Flame size={24} className="text-orange-500" />
+               <h3 className="text-2xl font-black font-heading text-[#004d3d]">Gees System</h3>
+            </div>
+            <div className="space-y-6">
+               <div className="p-5 bg-slate-50 rounded-3xl border border-slate-100">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Tier Multipliers</p>
+                  <div className="space-y-3">
+                     <MultiplierRow tier="Cub" range="Lv 1-5" mult="1.0x" active={currentUser.rankTier === 'Cub'} />
+                     <MultiplierRow tier="Gazelle" range="Lv 6-10" mult="1.5x" active={currentUser.rankTier === 'Gazelle'} />
+                     <MultiplierRow tier="Springbok" range="Lv 11-15" mult="2.0x" active={currentUser.rankTier === 'Springbok'} />
+                     <MultiplierRow tier="Centurion" range="Lv 16+" mult="3.0x" active={currentUser.rankTier === 'Centurion'} />
+                  </div>
+               </div>
+
+               <section className="space-y-3">
+                 <h4 className="text-[10px] font-black uppercase text-[#004d3d] tracking-widest ml-1">How to earn BokBucks</h4>
+                 <div className="space-y-2">
+                    <EarnItem label="Book a Tour" value="+250 Base" />
+                    <EarnItem label="Top-up Wallet" value="+50 Base" />
+                    <EarnItem label="Hub Check-in" value="+30 Base" />
+                    <EarnItem label="Post a Vibe" value="+10 Base" />
+                 </div>
+                 <p className="text-[9px] text-slate-400 font-bold italic mt-2 px-1">
+                   * Multipliers apply to all base BokBucks earnings. Your current multiplier is {currentMultiplier}x.
+                 </p>
+               </section>
+
+               <button 
+                onClick={() => setShowMechanicsModal(false)}
+                className="w-full py-4 bg-[#004d3d] text-[#fdb913] rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-lg"
+               >
+                 Lekker!
+               </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Redemption Quick Access */}
       <button 
@@ -293,33 +355,6 @@ const Profile: React.FC<ProfileProps> = ({
               {exp.status === 'Purchased' && <CheckCircle2 size={20} className="text-green-500 p-2" />}
             </div>
           ))}
-        </div>
-      </div>
-
-      {/* Legal & Compliance Section */}
-      <div className="bg-white rounded-[32px] p-6 shadow-sm border border-slate-100 space-y-6">
-        <h3 className="font-black text-lg font-heading text-[#004d3d]">Legal & Compliance</h3>
-        <div className="space-y-4">
-          <a href="/privacy" className="flex items-center justify-between group py-1">
-            <div className="flex items-center space-x-4">
-              <div className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center border border-slate-100 text-slate-400 group-hover:text-[#004d3d] transition-colors"><FileText size={18} /></div>
-              <div>
-                <p className="text-sm font-black text-[#004d3d] leading-none mb-1">Privacy Policy</p>
-                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">How we handle your data</p>
-              </div>
-            </div>
-            <ChevronRight size={16} className="text-slate-300 group-hover:translate-x-1 transition-transform" />
-          </a>
-          <a href="/terms" className="flex items-center justify-between group py-1">
-            <div className="flex items-center space-x-4">
-              <div className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center border border-slate-100 text-slate-400 group-hover:text-[#004d3d] transition-colors"><Shield size={18} /></div>
-              <div>
-                <p className="text-sm font-black text-[#004d3d] leading-none mb-1">Terms of Service</p>
-                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Rules of the neighborhood</p>
-              </div>
-            </div>
-            <ChevronRight size={16} className="text-slate-300 group-hover:translate-x-1 transition-transform" />
-          </a>
         </div>
       </div>
 
@@ -427,7 +462,7 @@ const Profile: React.FC<ProfileProps> = ({
         </div>
       )}
 
-      {/* Booking Confirmations - Redesigned for obstruction-free checkout */}
+      {/* Booking Confirmations */}
       {selectedForPurchase && (
         <div className="fixed inset-0 z-[10000] bg-black/60 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
           <div className="bg-white w-full max-w-sm rounded-[48px] shadow-luxury animate-scaleIn relative overflow-hidden flex flex-col max-h-[85vh]">
@@ -461,10 +496,10 @@ const Profile: React.FC<ProfileProps> = ({
                  <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Total Amount</span>
                  <span className="text-xl font-black text-[#004d3d]">R {totalCost.toLocaleString()}</span>
               </div>
+              <div className="h-12" />
             </div>
 
-            {/* Action Area with safe-zone padding */}
-            <div className="p-8 pt-2 pb-14 bg-white border-t border-slate-100">
+            <div className="p-8 pt-4 pb-24 bg-white border-t border-slate-100 shrink-0">
               <button 
                 onClick={handleConfirmPurchase} 
                 className="w-full bg-[#004d3d] text-[#fdb913] py-5 rounded-3xl font-black uppercase text-xs tracking-[0.1em] shadow-luxury flex items-center justify-center space-x-3 active:scale-95 transition-all"
@@ -485,6 +520,26 @@ const Profile: React.FC<ProfileProps> = ({
     </div>
   );
 };
+
+const MultiplierRow: React.FC<{ tier: string, range: string, mult: string, active: boolean }> = ({ tier, range, mult, active }) => (
+  <div className={`flex items-center justify-between p-3 rounded-2xl border ${active ? 'bg-[#004d3d] border-[#004d3d] text-[#fdb913]' : 'bg-white border-slate-100 text-slate-500'}`}>
+     <div className="flex items-center space-x-3">
+        <div className={`w-2 h-2 rounded-full ${active ? 'bg-[#fdb913]' : 'bg-slate-200'}`}></div>
+        <span className="text-[10px] font-black uppercase tracking-widest">{tier}</span>
+     </div>
+     <div className="text-right">
+        <span className="text-[8px] font-bold uppercase block opacity-60">{range}</span>
+        <span className="text-xs font-black">{mult} Multiplier</span>
+     </div>
+  </div>
+);
+
+const EarnItem: React.FC<{ label: string, value: string }> = ({ label, value }) => (
+  <div className="flex items-center justify-between bg-white border border-slate-100 p-3 rounded-2xl">
+     <span className="text-[10px] font-bold text-slate-600 uppercase">{label}</span>
+     <span className="text-[10px] font-black text-[#004d3d]">{value}</span>
+  </div>
+);
 
 const PreferenceItem: React.FC<{ icon: React.ReactNode, label: string, desc: string, action: React.ReactNode }> = ({ icon, label, desc, action }) => (
   <div className="flex items-center justify-between">

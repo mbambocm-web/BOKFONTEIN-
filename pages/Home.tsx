@@ -3,7 +3,7 @@ import {
   ChevronRight, Flame, MapPin, X, Send, Sparkles, Loader2, Trophy, 
   Zap, Activity, Camera, Scan, Mic, MicOff, ExternalLink, Info, AlertCircle,
   BarChart3, ArrowUpRight, TrendingUp, Sun, Moon, Sunrise, Sunset, ChevronLeft, Volume2, Fingerprint, Image as ImageIcon, CheckCircle2,
-  RefreshCw, RotateCcw
+  RefreshCw, RotateCcw, Headphones, Radio
 } from 'lucide-react';
 import { gemini } from '../services/geminiService';
 import { bokSync } from '../services/syncService';
@@ -73,6 +73,14 @@ const Home: React.FC<HomeProps> = ({ onAddNotification, userName = "Thabo" }) =>
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [selectedFilter, setSelectedFilter] = useState<ARFilter>(AR_FILTERS[0]);
   
+  // Live Voice State
+  const [isLiveMode, setIsLiveMode] = useState(false);
+  const [isLiveActive, setIsLiveActive] = useState(false);
+  const liveSessionRef = useRef<any>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const audioSourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
+  const nextStartTimeRef = useRef<number>(0);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -200,6 +208,9 @@ const Home: React.FC<HomeProps> = ({ onAddNotification, userName = "Thabo" }) =>
     setIsLoading(true);
     native.hapticImpact();
 
+    // Create placeholder for streaming
+    setMessages(prev => [...prev, { role: 'bot', text: '' }]);
+
     try {
       let fullText = '';
       const stream = gemini.chatStream(msg);
@@ -207,12 +218,11 @@ const Home: React.FC<HomeProps> = ({ onAddNotification, userName = "Thabo" }) =>
         fullText += chunk.text;
         setMessages(prev => {
           const next = [...prev];
-          if (next[next.length - 1].role === 'bot' && next.length > messages.length + 1) {
-            next[next.length - 1] = { role: 'bot', text: fullText, grounding: chunk.grounding };
-            return next;
-          } else {
-            return [...next, { role: 'bot', text: fullText, grounding: chunk.grounding }];
+          const lastIndex = next.length - 1;
+          if (next[lastIndex].role === 'bot') {
+            next[lastIndex] = { ...next[lastIndex], text: fullText, grounding: chunk.grounding };
           }
+          return next;
         });
       }
     } catch (error) {
@@ -220,6 +230,72 @@ const Home: React.FC<HomeProps> = ({ onAddNotification, userName = "Thabo" }) =>
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Live Mode Logic
+  const startLiveMode = async () => {
+    native.hapticImpact();
+    setIsLiveActive(true);
+    
+    try {
+      const inputCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
+      const outputCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+      audioContextRef.current = outputCtx;
+      
+      const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      
+      const sessionPromise = gemini.connectLive({
+        onopen: () => {
+          const source = inputCtx.createMediaStreamSource(micStream);
+          const scriptProcessor = inputCtx.createScriptProcessor(4096, 1, 1);
+          scriptProcessor.onaudioprocess = (e) => {
+            const inputData = e.inputBuffer.getChannelData(0);
+            const pcmBlob = gemini.createPcmBlob(inputData);
+            sessionPromise.then(session => {
+              session.sendRealtimeInput({ media: pcmBlob });
+            });
+          };
+          source.connect(scriptProcessor);
+          scriptProcessor.connect(inputCtx.destination);
+        },
+        onmessage: async (message) => {
+          const base64Audio = message.serverContent?.modelTurn?.parts[0]?.inlineData?.data;
+          if (base64Audio) {
+            nextStartTimeRef.current = Math.max(nextStartTimeRef.current, outputCtx.currentTime);
+            const buffer = await gemini.decodeAudioData(gemini.decodeAudio(base64Audio), outputCtx, 24000, 1);
+            const source = outputCtx.createBufferSource();
+            source.buffer = buffer;
+            source.connect(outputCtx.destination);
+            source.start(nextStartTimeRef.current);
+            nextStartTimeRef.current += buffer.duration;
+            audioSourcesRef.current.add(source);
+            source.onended = () => audioSourcesRef.current.delete(source);
+          }
+
+          if (message.serverContent?.interrupted) {
+            audioSourcesRef.current.forEach(s => s.stop());
+            audioSourcesRef.current.clear();
+            nextStartTimeRef.current = 0;
+          }
+        },
+        onerror: (e) => console.error("Live Error", e),
+        onclose: () => setIsLiveActive(false),
+      });
+
+      liveSessionRef.current = await sessionPromise;
+    } catch (err) {
+      console.error("Live Audio Failed", err);
+      setIsLiveActive(false);
+    }
+  };
+
+  const stopLiveMode = () => {
+    if (liveSessionRef.current) {
+      liveSessionRef.current.close();
+      liveSessionRef.current = null;
+    }
+    setIsLiveActive(false);
+    setIsLiveMode(false);
   };
 
   return (
@@ -308,7 +384,7 @@ const Home: React.FC<HomeProps> = ({ onAddNotification, userName = "Thabo" }) =>
         </button>
       </div>
 
-      {/* MODAL: BOK GEES VISION - FLOAT LAYER 2000 */}
+      {/* MODAL: BOK GEES VISION */}
       {isVisionOpen && (
         <div className="fixed inset-0 z-[2000] bg-black/80 backdrop-blur-xl flex items-center justify-center p-6 animate-fadeIn">
           <div className="bg-white w-full max-w-sm rounded-[48px] p-8 shadow-luxury animate-scaleIn relative overflow-hidden flex flex-col max-h-[85vh]">
@@ -323,28 +399,17 @@ const Home: React.FC<HomeProps> = ({ onAddNotification, userName = "Thabo" }) =>
             >
               <X size={24} />
             </button>
-            
             <div className="mb-6 shrink-0">
               <h3 className="text-2xl font-black font-heading text-[#004d3d] mb-1">Bok Gees Vision</h3>
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">AI AR Analyzer</p>
             </div>
-            
             <div className="w-full aspect-square bg-slate-50 rounded-[32px] border-2 border-dashed border-slate-200 flex flex-col items-center justify-center relative overflow-hidden group mb-6 shrink-0">
                {isCameraActive ? (
                  <div className="relative w-full h-full">
-                   <video 
-                     ref={videoRef} 
-                     autoPlay 
-                     playsInline 
-                     className="w-full h-full object-cover scale-x-[-1]" 
-                     style={{ filter: selectedFilter.filterClass }}
-                   />
+                   <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover scale-x-[-1]" style={{ filter: selectedFilter.filterClass }} />
                    {selectedFilter.overlay}
                    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center space-x-6">
-                      <button 
-                        onClick={capturePhoto}
-                        className="w-16 h-16 bg-white rounded-full border-4 border-[#004d3d] shadow-lg flex items-center justify-center active:scale-90 transition-all"
-                      >
+                      <button onClick={capturePhoto} className="w-16 h-16 bg-white rounded-full border-4 border-[#004d3d] shadow-lg flex items-center justify-center active:scale-90 transition-all">
                         <div className="w-12 h-12 bg-[#004d3d] rounded-full"></div>
                       </button>
                    </div>
@@ -352,10 +417,7 @@ const Home: React.FC<HomeProps> = ({ onAddNotification, userName = "Thabo" }) =>
                ) : visionImage ? (
                  <div className="relative w-full h-full">
                     <img src={visionImage} className="w-full h-full object-cover" alt="Gees Capture" />
-                    <button 
-                      onClick={() => { setVisionImage(null); setVisionFeedback(null); startCamera(); }}
-                      className="absolute top-4 right-4 bg-white/20 backdrop-blur-md p-2 rounded-xl text-white"
-                    >
+                    <button onClick={() => { setVisionImage(null); setVisionFeedback(null); startCamera(); }} className="absolute top-4 right-4 bg-white/20 backdrop-blur-md p-2 rounded-xl text-white">
                       <RotateCcw size={18} />
                     </button>
                  </div>
@@ -365,19 +427,11 @@ const Home: React.FC<HomeProps> = ({ onAddNotification, userName = "Thabo" }) =>
                       <Camera size={36} />
                     </div>
                     <div className="flex flex-col space-y-3 w-full px-8">
-                      <button 
-                        onClick={startCamera}
-                        className="w-full py-3 bg-[#004d3d] text-[#fdb913] rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg flex items-center justify-center space-x-2"
-                      >
-                        <Camera size={16} />
-                        <span>Open Live Camera</span>
+                      <button onClick={startCamera} className="w-full py-3 bg-[#004d3d] text-[#fdb913] rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg flex items-center justify-center space-x-2">
+                        <Camera size={16} /> <span>Open Live Camera</span>
                       </button>
-                      <button 
-                        onClick={() => fileInputRef.current?.click()}
-                        className="w-full py-3 bg-white border border-slate-200 text-slate-400 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center space-x-2"
-                      >
-                        <ImageIcon size={16} />
-                        <span>Upload Photo</span>
+                      <button onClick={() => fileInputRef.current?.click()} className="w-full py-3 bg-white border border-slate-200 text-slate-400 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center space-x-2">
+                        <ImageIcon size={16} /> <span>Upload Photo</span>
                       </button>
                     </div>
                  </div>
@@ -385,7 +439,6 @@ const Home: React.FC<HomeProps> = ({ onAddNotification, userName = "Thabo" }) =>
                <input type="file" ref={fileInputRef} onChange={handleVisionCapture} className="hidden" accept="image/*" />
                <canvas ref={canvasRef} className="hidden" />
             </div>
-
             <div className="flex-1 overflow-y-auto no-scrollbar pb-10">
               {isAnalyzing && (
                 <div className="py-8 flex flex-col items-center space-y-3 animate-fadeIn">
@@ -407,80 +460,103 @@ const Home: React.FC<HomeProps> = ({ onAddNotification, userName = "Thabo" }) =>
         </div>
       )}
 
-      {/* MODAL: ELITE CONCIERGE - FLOATING MIDDLE POSITION, LAYER 9999 */}
+      {/* MODAL: ELITE CONCIERGE */}
       {isChatOpen && (
         <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
           <div className="bg-[#f8fafc] w-full max-w-sm rounded-[48px] shadow-luxury animate-scaleIn relative overflow-hidden flex flex-col h-[75vh] border border-white/50">
-            {/* Modal Header */}
             <header className="p-6 bg-[#004d3d] text-white flex items-center justify-between rounded-b-[40px] shadow-lg shrink-0">
                <div className="flex items-center space-x-3">
                   <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center border border-white/10"><Sparkles className="text-[#fdb913]" size={20} /></div>
                   <div className="flex flex-col">
-                    <h3 className="font-black text-base font-heading leading-tight">Elite Concierge</h3>
-                    <p className="text-[8px] font-black text-[#fdb913] uppercase tracking-widest">Always Active</p>
+                    <h3 className="font-black text-base font-heading leading-tight">{isLiveMode ? 'Live Gees' : 'Elite Concierge'}</h3>
+                    <p className="text-[8px] font-black text-[#fdb913] uppercase tracking-widest">{isLiveActive ? 'Live Connection' : 'Ready to help'}</p>
                   </div>
                </div>
-               <button 
-                  onClick={() => setIsChatOpen(false)} 
-                  className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center active:scale-90 transition-all"
-                  aria-label="Close Chat"
-               >
-                 <X size={20} />
-               </button>
+               <div className="flex items-center space-x-2">
+                 <button 
+                   onClick={() => { setIsLiveMode(!isLiveMode); if(isLiveActive) stopLiveMode(); }}
+                   className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isLiveMode ? 'bg-[#fdb913] text-[#004d3d]' : 'bg-white/10 text-white'}`}
+                 >
+                   <Mic size={20} />
+                 </button>
+                 <button onClick={() => { stopLiveMode(); setIsChatOpen(false); }} className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center active:scale-90 transition-all">
+                   <X size={20} />
+                 </button>
+               </div>
             </header>
             
-            {/* Chat History Area */}
             <div className="flex-1 overflow-y-auto p-5 space-y-4 no-scrollbar bg-slate-50/50">
-              {messages.map((m, i) => (
-                <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-scaleIn`}>
-                  <div className={`max-w-[85%] p-4 rounded-[28px] ${m.role === 'user' ? 'bg-[#004d3d] text-white rounded-tr-none shadow-md' : 'bg-white border border-slate-100 text-slate-800 rounded-tl-none shadow-soft'}`}>
-                    <p className="text-xs font-medium leading-relaxed">{m.text}</p>
-                    {m.grounding && m.grounding.length > 0 && (
-                      <div className="mt-3 pt-2 border-t border-slate-50 space-y-1.5">
-                         <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Grounded Info:</p>
-                         {m.grounding.map((chunk, idx) => (
-                           <a key={idx} href={chunk.web?.uri || chunk.maps?.uri} target="_blank" rel="noopener noreferrer" className="flex items-center space-x-2 text-[#004d3d] hover:underline bg-slate-50 p-1.5 rounded-lg border border-slate-100">
-                              <ExternalLink size={8} className="shrink-0" />
-                              <span className="text-[8px] font-bold truncate">{chunk.web?.title || chunk.maps?.title || "Visit Source"}</span>
-                           </a>
-                         ))}
+              {isLiveMode ? (
+                <div className="h-full flex flex-col items-center justify-center space-y-8 animate-fadeIn">
+                   <div className="relative">
+                      <div className={`w-32 h-32 rounded-full bg-[#004d3d] flex items-center justify-center shadow-2xl ${isLiveActive ? 'animate-pulse' : ''}`}>
+                         <Radio size={48} className="text-[#fdb913]" />
                       </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-              {isLoading && (
-                <div className="flex justify-start">
-                   <div className="p-3 bg-white rounded-xl shadow-sm border border-slate-50">
-                      <Loader2 className="animate-spin text-[#004d3d]" size={16} />
+                      {isLiveActive && (
+                        <div className="absolute inset-0 rounded-full border-4 border-[#fdb913] animate-ping opacity-20"></div>
+                      )}
                    </div>
+                   <div className="text-center space-y-2">
+                      <h4 className="text-lg font-black text-[#004d3d] uppercase tracking-tight">{isLiveActive ? 'Streaming Gees' : 'Ready for Voice Mode'}</h4>
+                      <p className="text-xs text-slate-400 font-bold px-12">"Aweh! Just start talking to BokBot, bru. I'm listening."</p>
+                   </div>
+                   {!isLiveActive ? (
+                     <button onClick={startLiveMode} className="bg-[#fdb913] text-[#004d3d] px-12 py-4 rounded-[24px] font-black uppercase text-xs tracking-widest shadow-xl active:scale-95 transition-all">Connect Voice</button>
+                   ) : (
+                     <button onClick={stopLiveMode} className="bg-red-500 text-white px-12 py-4 rounded-[24px] font-black uppercase text-xs tracking-widest shadow-xl active:scale-95 transition-all">End Session</button>
+                   )}
                 </div>
+              ) : (
+                <>
+                  {messages.map((m, i) => (
+                    <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-scaleIn`}>
+                      <div className={`max-w-[85%] p-4 rounded-[28px] ${m.role === 'user' ? 'bg-[#004d3d] text-white rounded-tr-none shadow-md' : 'bg-white border border-slate-100 text-slate-800 rounded-tl-none shadow-soft'}`}>
+                        <p className="text-xs font-medium leading-relaxed">{m.text || (i === messages.length - 1 && isLoading ? "..." : "")}</p>
+                        {m.grounding && m.grounding.length > 0 && (
+                          <div className="mt-3 pt-2 border-t border-slate-50 space-y-1.5">
+                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Grounded Info:</p>
+                            {m.grounding.map((chunk, idx) => (
+                              <a key={idx} href={chunk.web?.uri || chunk.maps?.uri} target="_blank" rel="noopener noreferrer" className="flex items-center space-x-2 text-[#004d3d] hover:underline bg-slate-50 p-1.5 rounded-lg border border-slate-100">
+                                <ExternalLink size={8} className="shrink-0" />
+                                <span className="text-[8px] font-bold truncate">{chunk.web?.title || chunk.maps?.title || "Visit Source"}</span>
+                              </a>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  {isLoading && messages[messages.length-1].text === '' && (
+                    <div className="flex justify-start">
+                       <div className="p-3 bg-white rounded-xl shadow-sm border border-slate-50">
+                          <Loader2 className="animate-spin text-[#004d3d]" size={16} />
+                       </div>
+                    </div>
+                  )}
+                  <div ref={chatEndRef} />
+                </>
               )}
-              <div ref={chatEndRef} />
             </div>
 
-            {/* FLOATING INPUT BOX - FIRMLY ATTACHED TO MODAL BASE */}
-            <div className="p-5 bg-white border-t border-slate-100 shrink-0">
-              <div className="flex items-center space-x-2 bg-slate-50 p-1.5 rounded-[24px] border border-slate-100 focus-within:ring-2 focus-within:ring-[#004d3d]/5 transition-all">
-                <input 
-                  type="text" 
-                  value={chatInput} 
-                  onChange={e => setChatInput(e.target.value)} 
-                  onKeyPress={e => e.key === 'Enter' && handleSendMessage()} 
-                  placeholder="Ask BokBot anything..." 
-                  className="flex-1 bg-transparent px-4 py-2 text-xs outline-none font-medium text-slate-800"
-                  autoFocus
-                />
-                <button 
-                  onClick={handleSendMessage} 
-                  disabled={!chatInput.trim() || isLoading} 
-                  className="w-10 h-10 bg-[#004d3d] text-[#fdb913] rounded-xl flex items-center justify-center shadow-md active:scale-95 transition-all disabled:opacity-50"
-                >
-                  {isLoading ? <RefreshCw className="animate-spin" size={16} /> : <Send size={16} />}
-                </button>
+            {!isLiveMode && (
+              <div className="p-5 bg-white border-t border-slate-100 shrink-0">
+                <div className="flex items-center space-x-2 bg-slate-50 p-1.5 rounded-[24px] border border-slate-100 focus-within:ring-2 focus-within:ring-[#004d3d]/5 transition-all">
+                  <input 
+                    type="text" 
+                    value={chatInput} 
+                    onChange={e => setChatInput(e.target.value)} 
+                    onKeyPress={e => e.key === 'Enter' && handleSendMessage()} 
+                    placeholder="Ask BokBot anything..." 
+                    className="flex-1 bg-transparent px-4 py-2 text-xs outline-none font-medium text-slate-800"
+                    autoFocus
+                  />
+                  <button onClick={handleSendMessage} disabled={!chatInput.trim() || isLoading} className="w-10 h-10 bg-[#004d3d] text-[#fdb913] rounded-xl flex items-center justify-center shadow-md active:scale-95 transition-all disabled:opacity-50">
+                    {isLoading ? <RefreshCw className="animate-spin" size={16} /> : <Send size={16} />}
+                  </button>
+                </div>
+                <p className="text-[7px] text-center text-slate-300 font-black uppercase tracking-widest mt-2">Streaming via Gemini AI 🇿🇦</p>
               </div>
-              <p className="text-[7px] text-center text-slate-300 font-black uppercase tracking-widest mt-2">Powered by Gemini AI 🇿🇦</p>
-            </div>
+            )}
           </div>
         </div>
       )}

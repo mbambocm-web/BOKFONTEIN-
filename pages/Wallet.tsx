@@ -1,11 +1,14 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   Eye, Plus, Grid, Utensils, ShoppingBag, History, Award, ChevronRight, 
   Send, QrCode, X, Camera, ShieldCheck, RefreshCw, Ticket, Zap, 
-  AlertCircle, CreditCard, Banknote, CheckCircle2, ArrowRight, Lock
+  AlertCircle, CreditCard, Banknote, CheckCircle2, ArrowRight, Lock, 
+  Edit3, Coins
 } from 'lucide-react';
 import { native } from '../services/nativeService';
 import { paymentService } from '../services/paymentService';
+import { db } from '../services/db';
 
 interface WalletProps {
   balance: number;
@@ -17,6 +20,7 @@ const Wallet: React.FC<WalletProps> = ({ balance, onUpdateBalance, onAddNotifica
   const [isScanning, setIsScanning] = useState(false);
   const [topUpStep, setTopUpStep] = useState<'none' | 'amount' | 'card' | 'verify' | 'success'>('none');
   const [selectedAmount, setSelectedAmount] = useState<number>(0);
+  const [customAmount, setCustomAmount] = useState<string>('');
   const [isVerifying, setIsVerifying] = useState(false);
   const [scanStatus, setScanStatus] = useState<'idle' | 'scanning' | 'success' | 'error' | 'invalid'>('idle');
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -40,6 +44,15 @@ const Wallet: React.FC<WalletProps> = ({ balance, onUpdateBalance, onAddNotifica
     setTopUpStep('card');
   };
 
+  const handleCustomAmountContinue = () => {
+    const amt = parseFloat(customAmount);
+    if (isNaN(amt) || amt <= 0) {
+      onAddNotification("Invalid Amount", "Please enter a valid amount to top up.", "system");
+      return;
+    }
+    handleSelectAmount(amt);
+  };
+
   const handleProcessPayment = async () => {
     native.hapticImpact();
     setTopUpStep('verify');
@@ -53,6 +66,13 @@ const Wallet: React.FC<WalletProps> = ({ balance, onUpdateBalance, onAddNotifica
         setIsVerifying(false);
         setTopUpStep('success');
         onUpdateBalance(selectedAmount);
+        
+        // Process reward activity
+        const currentUser = db.getCurrentUser();
+        if (currentUser) {
+          db.processActivity(currentUser.id, 'topup');
+        }
+
         native.hapticSuccess();
         
         const newTx = {
@@ -81,6 +101,7 @@ const Wallet: React.FC<WalletProps> = ({ balance, onUpdateBalance, onAddNotifica
     native.hapticImpact();
     setTopUpStep('none');
     setSelectedAmount(0);
+    setCustomAmount('');
     setIsVerifying(false);
   };
 
@@ -113,8 +134,8 @@ const Wallet: React.FC<WalletProps> = ({ balance, onUpdateBalance, onAddNotifica
           <div>
             <p className="text-white/40 text-[10px] font-black uppercase tracking-[0.3em] mb-2">Member Wallet</p>
             <div className="flex items-baseline space-x-1.5">
-              <span className="text-2xl font-bold text-[#fdb913]">R</span>
-              <h2 className="text-5xl font-extrabold font-heading text-white tracking-tighter">
+              <span className="text-xl font-bold text-[#fdb913]">R</span>
+              <h2 className="text-4xl font-extrabold font-heading text-white tracking-tighter">
                 {balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).split('.')[0]}
                 <span className="text-white/40">.{balance.toFixed(2).split('.')[1]}</span>
               </h2>
@@ -178,17 +199,17 @@ const Wallet: React.FC<WalletProps> = ({ balance, onUpdateBalance, onAddNotifica
         </div>
       </section>
 
-      {/* Overlays - Guaranteed visibility above navigation */}
+      {/* Overlays */}
       {topUpStep !== 'none' && (
         <div className="fixed inset-0 z-[10000] bg-black/60 backdrop-blur-md flex items-center justify-center p-6 animate-fadeIn">
           <div className="bg-white w-full max-sm rounded-[48px] p-10 animate-scaleIn relative shadow-luxury overflow-y-auto max-h-[90vh] no-scrollbar">
             <button onClick={closeTopUp} className="absolute top-8 right-8 text-slate-400 p-2"><X size={24} /></button>
             
             {topUpStep === 'amount' && (
-              <div className="space-y-8 pb-12">
+              <div className="space-y-8 pb-20">
                 <div>
                   <h3 className="text-2xl font-black font-heading text-[#004d3d] mb-2">Load Funds</h3>
-                  <p className="text-slate-400 text-xs font-medium">Select top up amount.</p>
+                  <p className="text-slate-400 text-xs font-medium">Select or enter top up amount.</p>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   {[500, 1000, 2500, 5000].map(amt => (
@@ -198,11 +219,33 @@ const Wallet: React.FC<WalletProps> = ({ balance, onUpdateBalance, onAddNotifica
                     </button>
                   ))}
                 </div>
+
+                <div className="space-y-4 pt-4">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Or Enter Custom Amount</p>
+                  <div className="relative group">
+                    <div className="absolute left-6 top-1/2 -translate-y-1/2 text-[#004d3d] font-black text-lg">R</div>
+                    <input 
+                      type="number" 
+                      value={customAmount}
+                      onChange={(e) => setCustomAmount(e.target.value)}
+                      placeholder="0.00"
+                      className="w-full bg-slate-50 border border-slate-100 rounded-[24px] py-5 pl-12 pr-6 text-xl font-black text-[#004d3d] outline-none focus:ring-2 focus:ring-[#fdb913]/20 transition-all"
+                    />
+                  </div>
+                  <button 
+                    onClick={handleCustomAmountContinue}
+                    disabled={!customAmount || parseFloat(customAmount) <= 0}
+                    className="w-full bg-[#004d3d] text-[#fdb913] py-5 rounded-[24px] font-black uppercase tracking-widest shadow-xl flex items-center justify-center space-x-2 active:scale-95 transition-all disabled:opacity-50"
+                  >
+                    <span>Continue</span>
+                    <ArrowRight size={18} />
+                  </button>
+                </div>
               </div>
             )}
 
             {topUpStep === 'card' && (
-              <div className="space-y-8 pb-12">
+              <div className="space-y-8 pb-24">
                 <div>
                   <h3 className="text-2xl font-black font-heading text-[#004d3d] mb-2">Secure Payment</h3>
                   <p className="text-slate-400 text-xs font-medium">Adding R {selectedAmount.toLocaleString()} to wallet.</p>
@@ -223,14 +266,14 @@ const Wallet: React.FC<WalletProps> = ({ balance, onUpdateBalance, onAddNotifica
             )}
 
             {topUpStep === 'verify' && (
-              <div className="h-80 flex flex-col items-center justify-center space-y-6 text-center pb-12">
+              <div className="h-80 flex flex-col items-center justify-center space-y-6 text-center pb-20">
                 <RefreshCw size={64} className="text-[#004d3d] animate-spin" />
                 <h4 className="text-xl font-black text-[#004d3d]">Gateway Redirect...</h4>
               </div>
             )}
 
             {topUpStep === 'success' && (
-              <div className="h-80 flex flex-col items-center justify-center space-y-6 text-center pb-14">
+              <div className="h-80 flex flex-col items-center justify-center space-y-6 text-center pb-24">
                 <div className="w-24 h-24 bg-green-50 rounded-full flex items-center justify-center text-green-500 shadow-lg shadow-green-100">
                   <span className="animate-scaleIn inline-block">
                     <CheckCircle2 size={48} strokeWidth={3} />

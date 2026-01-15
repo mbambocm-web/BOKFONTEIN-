@@ -1,10 +1,11 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
   Send, Sparkles, MessageCircle, Users, UserPlus, CheckCheck, X, 
   Utensils, ShoppingBag, Flag, Info, MapPin, Zap, Flame, Beer, Music,
   Loader2, UserCheck, Clock, Navigation, Trophy, Quote, Heart, TrendingUp,
   PlusCircle, Activity, MoreVertical, ShieldAlert, UserX, AlertTriangle, 
-  ShoppingBasket, ArrowRight, ShieldCheck, Star, Gift, Package, Award
+  ShoppingBasket, ArrowRight, ShieldCheck, Star, Gift, Package, Award,
+  RefreshCw
 } from 'lucide-react';
 import { gemini } from '../services/geminiService';
 import { native } from '../services/nativeService';
@@ -28,12 +29,19 @@ interface CommunityProps {
   onUpdateBalance: (amount: number) => void;
 }
 
+const POSTS_PER_PAGE = 5;
+
 const Community: React.FC<CommunityProps> = ({ onAddNotification, blockedUsers, onBlockUser, onSubmitReport, balance, onUpdateBalance }) => {
   const [view, setView] = useState<CommunityView>('vibe');
   const [vibeInput, setVibeInput] = useState('');
   const [vibePosts, setVibePosts] = useState<VibePost[]>(db.getVibePosts());
   const [allMembers, setAllMembers] = useState<Member[]>(db.getMembers());
   const currentUser = db.getCurrentUser();
+
+  // Infinite Scroll State
+  const [visibleCount, setVisibleCount] = useState(POSTS_PER_PAGE);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const loaderRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setAllMembers(db.getMembers().sort((a, b) => b.geesXP - a.geesXP));
@@ -78,6 +86,40 @@ const Community: React.FC<CommunityProps> = ({ onAddNotification, blockedUsers, 
   };
 
   const filteredPosts = vibePosts.filter(p => !blockedUsers.includes(p.userId));
+  const pagedPosts = filteredPosts.slice(0, visibleCount);
+  const hasMore = visibleCount < filteredPosts.length;
+
+  const loadMorePosts = useCallback(() => {
+    if (isLoadingMore || !hasMore) return;
+    
+    setIsLoadingMore(true);
+    // Simulate network delay for that "lekker" feel
+    setTimeout(() => {
+      setVisibleCount(prev => prev + POSTS_PER_PAGE);
+      setIsLoadingMore(false);
+      native.hapticImpact();
+    }, 800);
+  }, [isLoadingMore, hasMore]);
+
+  // Intersection Observer for Infinite Scroll
+  useEffect(() => {
+    if (view !== 'vibe') return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !isLoadingMore) {
+          loadMorePosts();
+        }
+      },
+      { threshold: 1.0 }
+    );
+
+    if (loaderRef.current) {
+      observer.observe(loaderRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, [view, hasMore, isLoadingMore, loadMorePosts]);
 
   return (
     <div className="flex flex-col h-full animate-fadeIn overflow-hidden">
@@ -131,46 +173,65 @@ const Community: React.FC<CommunityProps> = ({ onAddNotification, blockedUsers, 
                 <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Neighborhood is quiet... start the vibe!</p>
               </div>
             ) : (
-              filteredPosts.map(post => (
-                <div key={post.id} className="bg-white rounded-[32px] p-5 border border-slate-100 shadow-soft animate-scaleIn">
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-[#fdb913]/20">
-                        <img src={post.userAvatar} className="w-full h-full object-cover" alt="" />
+              <>
+                {pagedPosts.map(post => (
+                  <div key={post.id} className="bg-white rounded-[32px] p-5 border border-slate-100 shadow-soft animate-scaleIn">
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-[#fdb913]/20">
+                          <img src={post.userAvatar} className="w-full h-full object-cover" alt="" />
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-black text-[#004d3d] leading-none mb-1">{post.userName}</h4>
+                          <p className="text-[9px] font-bold text-slate-300 uppercase tracking-widest">{post.timestamp}</p>
+                        </div>
                       </div>
-                      <div>
-                        <h4 className="text-sm font-black text-[#004d3d] leading-none mb-1">{post.userName}</h4>
-                        <p className="text-[9px] font-bold text-slate-300 uppercase tracking-widest">{post.timestamp}</p>
-                      </div>
+                      <button 
+                        onClick={() => handleReport(post)}
+                        className="p-2 text-slate-200 hover:text-red-400 transition-colors"
+                      >
+                        <Flag size={14} />
+                      </button>
                     </div>
-                    <button 
-                      onClick={() => handleReport(post)}
-                      className="p-2 text-slate-200 hover:text-red-400 transition-colors"
-                    >
-                      <Flag size={14} />
-                    </button>
-                  </div>
 
-                  <p className="text-sm text-slate-600 font-medium leading-relaxed px-1">
-                    {post.content}
-                  </p>
+                    <p className="text-sm text-slate-600 font-medium leading-relaxed px-1">
+                      {post.content}
+                    </p>
 
-                  <div className="flex items-center space-x-4 mt-5 pt-4 border-t border-slate-50">
-                    <button 
-                      onClick={() => handleLike(post.id)}
-                      className={`flex items-center space-x-1.5 px-4 py-2 rounded-xl transition-all ${currentUser && post.likes.includes(currentUser.id) ? 'bg-red-50 text-red-500' : 'bg-slate-50 text-slate-400'}`}
-                    >
-                      <Heart size={14} fill={currentUser && post.likes.includes(currentUser.id) ? 'currentColor' : 'none'} />
-                      <span className="text-[10px] font-black uppercase tracking-widest">{post.likes.length}</span>
-                    </button>
-                    
-                    <button className="flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-slate-50 text-slate-400 active:scale-95">
-                      <MessageCircle size={14} />
-                      <span className="text-[10px] font-black uppercase tracking-widest">Chat</span>
-                    </button>
+                    <div className="flex items-center space-x-4 mt-5 pt-4 border-t border-slate-50">
+                      <button 
+                        onClick={() => handleLike(post.id)}
+                        className={`flex items-center space-x-1.5 px-4 py-2 rounded-xl transition-all ${currentUser && post.likes.includes(currentUser.id) ? 'bg-red-50 text-red-500' : 'bg-slate-50 text-slate-400'}`}
+                      >
+                        <Heart size={14} fill={currentUser && post.likes.includes(currentUser.id) ? 'currentColor' : 'none'} />
+                        <span className="text-[10px] font-black uppercase tracking-widest">{post.likes.length}</span>
+                      </button>
+                      
+                      <button className="flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-slate-50 text-slate-400 active:scale-95">
+                        <MessageCircle size={14} />
+                        <span className="text-[10px] font-black uppercase tracking-widest">Chat</span>
+                      </button>
+                    </div>
                   </div>
+                ))}
+                
+                {/* Scroll Sentinel / Loader */}
+                <div ref={loaderRef} className="py-10 flex justify-center items-center">
+                  {isLoadingMore ? (
+                    <div className="flex flex-col items-center space-y-2">
+                      <RefreshCw className="animate-spin text-[#004d3d]" size={24} />
+                      <span className="text-[8px] font-black uppercase tracking-[0.2em] text-slate-300">Loading more Gees...</span>
+                    </div>
+                  ) : hasMore ? (
+                    <div className="h-4" />
+                  ) : (
+                    <div className="flex flex-col items-center space-y-2 opacity-30">
+                      <CheckCheck size={20} className="text-[#004d3d]" />
+                      <span className="text-[8px] font-black uppercase tracking-[0.2em] text-slate-400">You've reached the start of the vibe</span>
+                    </div>
+                  )}
                 </div>
-              ))
+              </>
             )}
           </div>
         </div>

@@ -1,3 +1,4 @@
+
 /**
  * BokBase - Persistence Layer
  * Handles all CRUD operations and simulates a cloud-sync backend.
@@ -17,20 +18,22 @@ interface BokDatabase {
   lastSync: string;
 }
 
+// XP per activity (Spirit Points)
 const XP_MAP: Record<BokActivity, number> = {
   post: 50,
-  purchase: 500,
-  topup: 200,
-  chat: 10,
-  checkin: 100
+  purchase: 1200, // Big boost for booking tours
+  topup: 300,
+  chat: 15,
+  checkin: 200
 };
 
+// Base BokBucks (Currency) per activity before multipliers
 const BUCKS_BASE_MAP: Record<BokActivity, number> = {
   post: 10,
-  purchase: 100,
+  purchase: 250,
   topup: 50,
   chat: 5,
-  checkin: 25
+  checkin: 30
 };
 
 const INITIAL_MEMBERS: Member[] = [

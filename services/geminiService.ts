@@ -1,5 +1,4 @@
-
-import { GoogleGenAI, Modality } from "@google/genai";
+import { GoogleGenAI, Modality, LiveServerMessage } from "@google/genai";
 
 const SYSTEM_INSTRUCTION = `
 You are "BokBot", the elite AI Concierge for BOKFONTEIN - The Ultimate South African Fan Experience. 
@@ -30,7 +29,6 @@ Always keep responses punchy and high-energy. Go Bokke!
 export class GeminiService {
   constructor() {}
 
-  // Helper to ensure fresh GoogleGenAI instance for each call
   private getClient() {
     return new GoogleGenAI({ apiKey: process.env.API_KEY });
   }
@@ -39,11 +37,12 @@ export class GeminiService {
     try {
       const ai = this.getClient();
       const response = await ai.models.generateContentStream({
-        model: 'gemini-3-pro-preview', // Upgraded for elite reasoning
+        model: 'gemini-3-pro-preview',
         contents: [{ role: 'user', parts: [{ text: message }] }],
         config: {
           systemInstruction: SYSTEM_INSTRUCTION,
           tools: useSearch ? [{ googleSearch: {} }] : [],
+          thinkingConfig: { thinkingBudget: 16000 }
         },
       });
 
@@ -109,13 +108,45 @@ export class GeminiService {
     }
   }
 
-  async connectLive(callbacks: any) {
+  /**
+   * Generates high-quality images using the Imagen 4 model.
+   * This is used for brand asset generation in the admin panel.
+   */
+  async generateImagen(prompt: string) {
+    try {
+      const ai = this.getClient();
+      const response = await ai.models.generateImages({
+        model: 'imagen-4.0-generate-001',
+        prompt: prompt,
+        config: {
+          numberOfImages: 1,
+          outputMimeType: 'image/jpeg',
+          aspectRatio: '1:1',
+        },
+      });
+
+      if (response.generatedImages && response.generatedImages.length > 0) {
+        const base64Data = response.generatedImages[0].image.imageBytes;
+        return `data:image/jpeg;base64,${base64Data}`;
+      }
+      throw new Error("No image generated");
+    } catch (error) {
+      console.error("Imagen Generation Error:", error);
+      throw error;
+    }
+  }
+
+  async connectLive(callbacks: {
+    onopen: () => void;
+    onmessage: (message: LiveServerMessage) => void;
+    onerror: (e: any) => void;
+    onclose: (e: any) => void;
+  }) {
     const ai = this.getClient();
     return ai.live.connect({
-      model: 'gemini-2.5-flash-native-audio-preview-12-2025', // Latest low-latency audio model
+      model: 'gemini-2.5-flash-native-audio-preview-12-2025',
       callbacks,
       config: {
-        // Correctly using Modality enum
         responseModalities: [Modality.AUDIO],
         speechConfig: {
           voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Puck' } },
@@ -125,7 +156,7 @@ export class GeminiService {
     });
   }
 
-  // Audio Utilities
+  // Audio Utilities per Specification
   encodeAudio(bytes: Uint8Array) {
     let binary = '';
     const len = bytes.byteLength;
