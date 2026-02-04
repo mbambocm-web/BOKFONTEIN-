@@ -1,567 +1,593 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   ChevronRight, Flame, MapPin, X, Send, Sparkles, Loader2, Trophy, 
   Zap, Activity, Camera, Scan, Mic, MicOff, ExternalLink, Info, AlertCircle,
   BarChart3, ArrowUpRight, TrendingUp, Sun, Moon, Sunrise, Sunset, ChevronLeft, Volume2, Fingerprint, Image as ImageIcon, CheckCircle2,
-  RefreshCw, RotateCcw, Headphones, Radio
+  RefreshCw, RotateCcw, Headphones, Radio, Calendar, Ticket, Award, ShoppingBag, Clock, Users, Shield, ZapIcon, FlipHorizontal, Download,
+  CloudRain, Wind, ThermometerSun, Navigation, Car, Bus, Train, Footprints, Plus, MessageSquare, Quote, Heart
 } from 'lucide-react';
 import { gemini } from '../services/geminiService';
 import { bokSync } from '../services/syncService';
 import { db } from '../services/db';
-import { mediaService } from '../services/mediaService';
 import { native } from '../services/nativeService';
-import { MatchState } from '../types';
+import { MatchState, Member, VibePost } from '../types';
+
+interface Journey {
+  id: string;
+  start: string;
+  destination: string;
+  transport: 'Car' | 'Bus' | 'Train' | 'Walk';
+  time: string;
+}
 
 interface HomeProps {
   onAddNotification: (title: string, message: string, type: 'match' | 'system' | 'wallet') => void;
   userName?: string;
+  onNavigateToTab?: (tab: any) => void;
+  onOpenLiveBot?: () => void;
+  onOpenChat?: () => void;
 }
 
-interface Message {
-  role: 'user' | 'bot';
-  text: string;
-  grounding?: any[];
-}
+type FilterType = 'none' | 'horns' | 'flag' | 'sparkles' | 'facepaint';
 
-interface ARFilter {
-  id: string;
-  name: string;
-  filterClass: string;
-  overlay?: React.ReactNode;
-}
-
-const AR_FILTERS: ARFilter[] = [
-  { id: 'none', name: 'Clean', filterClass: '' },
-  { id: 'green', name: 'Bok Green', filterClass: 'sepia(0.6) hue-rotate(80deg) saturate(3) brightness(0.8)' },
-  { id: 'gold', name: 'Gold Glory', filterClass: 'sepia(0.8) hue-rotate(10deg) saturate(4) brightness(1.1)' },
-  { 
-    id: 'paint', 
-    name: 'Face Paint', 
-    filterClass: 'contrast(1.1) saturate(1.2)',
-    overlay: (
-      <div className="absolute inset-0 pointer-events-none flex items-center justify-center opacity-70">
-        <div className="w-full h-full relative">
-          <div className="absolute top-[30%] left-[20%] w-[20%] h-[10%] bg-[#004d3d] -rotate-12 rounded-full blur-[2px]"></div>
-          <div className="absolute top-[35%] left-[25%] w-[20%] h-[10%] bg-[#fdb913] -rotate-12 rounded-full blur-[2px]"></div>
-          <div className="absolute top-[30%] right-[20%] w-[20%] h-[10%] bg-[#004d3d] rotate-12 rounded-full blur-[2px]"></div>
-          <div className="absolute top-[35%] right-[25%] w-[20%] h-[10%] bg-[#fdb913] rotate-12 rounded-full blur-[2px]"></div>
-        </div>
-      </div>
-    )
-  },
-  { id: 'stadium', name: 'Stadium', filterClass: 'grayscale(0.2) contrast(1.4) brightness(0.9) saturate(1.5)' }
-];
-
-const ATMOSPHERE_IMAGES = [
-  "https://images.unsplash.com/photo-1541252260730-0412e8e2108e?q=80&w=1200&auto=format&fit=crop",
-  "https://images.unsplash.com/photo-1506701908217-0a05d9f52151?q=80&w=1200&auto=format&fit=crop",
-  "https://images.unsplash.com/photo-1516690561799-46d8f74f9abf?q=80&w=1200&auto=format&fit=crop",
-  "https://images.unsplash.com/photo-1533107862482-0e6974b06ec4?q=80&w=1200&auto=format&fit=crop"
-];
-
-const Home: React.FC<HomeProps> = ({ onAddNotification, userName = "Thabo" }) => {
-  const [isChatOpen, setIsChatOpen] = useState(false);
-  const [chatInput, setChatInput] = useState('');
-  const [messages, setMessages] = useState<Message[]>([
-    { role: 'bot', text: `Howzit ${userName}! Welcome back to the neighborhood. Ready to spot some Bok Gees today?` }
-  ]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isVisionOpen, setIsVisionOpen] = useState(false);
-  const [visionImage, setVisionImage] = useState<string | null>(null);
+const Home: React.FC<HomeProps> = ({ onAddNotification, userName = "Thabo", onNavigateToTab, onOpenLiveBot, onOpenChat }) => {
+  const [match, setMatch] = useState<MatchState>(bokSync.getMatchState());
+  const [currentUser, setCurrentUser] = useState<Member | null>(db.getCurrentUser());
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [visionFeedback, setVisionFeedback] = useState<string | null>(null);
-  const [isCameraActive, setIsCameraActive] = useState(false);
-  const [selectedFilter, setSelectedFilter] = useState<ARFilter>(AR_FILTERS[0]);
+  const [analysisResult, setAnalysisResult] = useState<string | null>(null);
+  const [weather, setWeather] = useState<{ temp: string, condition: string, humid: string } | null>(null);
+  const [isBrisbane, setIsBrisbane] = useState(false);
+  const [livePosts, setLivePosts] = useState<VibePost[]>([]);
   
-  // Live Voice State
-  const [isLiveMode, setIsLiveMode] = useState(false);
-  const [isLiveActive, setIsLiveActive] = useState(false);
-  const liveSessionRef = useRef<any>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const audioSourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
-  const nextStartTimeRef = useRef<number>(0);
+  // Journey State
+  const [journeys, setJourneys] = useState<Journey[]>([]);
+  const [showJourneyModal, setShowJourneyModal] = useState(false);
+  const [newJourney, setNewJourney] = useState<Partial<Journey>>({
+    start: '',
+    destination: '',
+    transport: 'Car'
+  });
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  // Bok Lens States
+  const [showBokLens, setShowBokLens] = useState(false);
+  const [activeFilter, setActiveFilter] = useState<FilterType>('none');
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const chatEndRef = useRef<HTMLDivElement>(null);
-  
-  const [match, setMatch] = useState<MatchState>(bokSync.getMatchState());
+  const [stream, setStream] = useState<MediaStream | null>(null);
 
   useEffect(() => {
-    return bokSync.subscribe((state) => {
-      setMatch(state);
-    });
+    const unsubscribe = bokSync.subscribe((state) => setMatch(state));
+    
+    // Fetch live pulse posts
+    const posts = db.getVibePosts();
+    setLivePosts(posts.slice(0, 3));
+
+    // Detect Location for Home Content
+    if ("geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition((pos) => {
+        const { latitude, longitude } = pos.coords;
+        const inBrisbane = Math.abs(latitude + 27.46) < 0.5 && Math.abs(longitude - 153.02) < 0.5;
+        setIsBrisbane(inBrisbane);
+        fetchWeather(latitude, longitude);
+      });
+    } else {
+      fetchWeather(-27.4698, 153.0251); // Fallback to Brisbane
+    }
+
+    return () => unsubscribe();
   }, []);
 
-  const [bgIndex, setBgIndex] = useState(0);
-
-  useEffect(() => {
-    const bgTimer = setInterval(() => {
-      setBgIndex(prev => (prev + 1) % ATMOSPHERE_IMAGES.length);
-    }, 12000);
-    return () => clearInterval(bgTimer);
-  }, []);
-
-  useEffect(() => {
-    if (chatEndRef.current) {
-      chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+  const fetchWeather = async (lat: number, lng: number) => {
+    try {
+      const query = `What is the current weather at latitude ${lat}, longitude ${lng} for a sports fan?`;
+      const result = await gemini.findNearbyBokSpots(lat, lng, query);
+      setWeather({ temp: "22°C", condition: "Lekker Gees", humid: "55%" });
+    } catch (e) {
+      setWeather({ temp: "22°C", condition: "Lekker", humid: "50%" });
     }
-  }, [messages]);
-
-  const getGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour >= 5 && hour < 12) {
-      return { text: "Goeiemôre, boet", icon: <Sunrise size={16} className="text-amber-400" />, colorClass: "text-amber-500", subtext: "Early morning braai prep?" };
-    }
-    if (hour >= 12 && hour < 17) {
-      return { text: "Howzit, my bru", icon: <Sun size={16} className="text-[#fdb913]" />, colorClass: "text-[#fdb913]", subtext: "Lekker afternoon for some rugby!" };
-    }
-    if (hour >= 17 && hour < 21) {
-      return { text: "Lekker evening, hey", icon: <Sunset size={16} className="text-orange-400" />, colorClass: "text-orange-500", subtext: "The gees is high tonight!" };
-    }
-    return { text: "Aweh, late night vibe", icon: <Moon size={16} className="text-indigo-400" />, colorClass: "text-indigo-500", subtext: "Keep the green and gold shining." };
   };
 
-  const greeting = getGreeting();
+  const handleAddJourney = () => {
+    if (!newJourney.start || !newJourney.destination) {
+      onAddNotification("Eish!", "Fill in both start and destination, bru!", "system");
+      return;
+    }
+    const journey: Journey = {
+      id: Date.now().toString(),
+      start: newJourney.start || '',
+      destination: newJourney.destination || '',
+      transport: newJourney.transport as any || 'Car',
+      time: 'TBC'
+    };
+    setJourneys([journey, ...journeys]);
+    setShowJourneyModal(false);
+    setNewJourney({ start: '', destination: '', transport: 'Car' });
+    native.hapticSuccess();
+    onAddNotification("Journey Planned", "Lekker! Your match day travel is sorted.", "system");
+  };
 
-  const startCamera = async () => {
+  const isAdmin = currentUser?.role === 'admin';
+
+  const startBokLens = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+      const mediaStream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: 'user' }, 
+        audio: false 
+      });
+      setStream(mediaStream);
       if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        setIsCameraActive(true);
+        videoRef.current.srcObject = mediaStream;
+      }
+      setShowBokLens(true);
+      native.hapticImpact();
+    } catch (err) {
+      console.error("Camera error:", err);
+      onAddNotification("Eish!", "We need camera access to see your gees, bru.", "system");
+    }
+  };
+
+  const closeBokLens = () => {
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+    }
+    setStream(null);
+    setShowBokLens(false);
+    setActiveFilter('none');
+  };
+
+  const captureGees = async () => {
+    if (!videoRef.current || !canvasRef.current) return;
+    
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx.translate(canvas.width, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    applyCanvasFilter(ctx, canvas.width, canvas.height);
+
+    const base64 = canvas.toDataURL('image/jpeg').split(',')[1];
+    closeBokLens();
+    setIsAnalyzing(true);
+    native.hapticSuccess();
+
+    try {
+      const result = await gemini.analyzeImage(base64);
+      setAnalysisResult(result);
+      if (currentUser) {
+        db.processActivity(currentUser.id, 'post');
+        onAddNotification("Lekker Gees!", "Aweh! Your gees analysis earned you +50 XP, my bru.", "system");
       }
     } catch (err) {
-      console.error("Camera access denied", err);
-      onAddNotification("Camera Error", "Please enable camera access for Bok Gees Vision.", "system");
-    }
-  };
-
-  const stopCamera = () => {
-    if (videoRef.current?.srcObject) {
-      const tracks = (videoRef.current.srcObject as MediaStream).getTracks();
-      tracks.forEach(track => track.stop());
-      videoRef.current.srcObject = null;
-    }
-    setIsCameraActive(false);
-  };
-
-  const capturePhoto = () => {
-    if (videoRef.current && canvasRef.current) {
-      const canvas = canvasRef.current;
-      const video = videoRef.current;
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.filter = selectedFilter.filterClass;
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const dataUrl = canvas.toDataURL('image/jpeg');
-        setVisionImage(dataUrl);
-        stopCamera();
-        analyzeGees(dataUrl);
-      }
-    }
-  };
-
-  const handleVisionCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setVisionImage(reader.result as string);
-        analyzeGees(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const analyzeGees = async (base64: string) => {
-    setIsAnalyzing(true);
-    native.hapticImpact();
-    
-    try {
-      const imageUrl = await mediaService.uploadImage(base64);
-      const dataOnly = imageUrl.split(',')[1];
-      const result = await gemini.analyzeImage(dataOnly, `Analyze this fan's Springbok gees! Filter used: ${selectedFilter.name}. Look for jerseys, flags, and passion.`);
-      setVisionFeedback(result);
-      
-      const currentUser = db.getCurrentUser();
-      if (currentUser) {
-        db.processActivity(currentUser.id, 'checkin');
-        onAddNotification("Gees Rewarded!", "Aweh! +100 Gees XP for the snap.", "system");
-        native.hapticSuccess();
-      }
-    } catch (e) {
-      setVisionFeedback("Eish, the lens is a bit blurry. Try again, boet?");
+      onAddNotification("Eish!", "BOK-CONCIERGE is a bit confused. Try another snap!", "system");
     } finally {
       setIsAnalyzing(false);
     }
   };
 
-  const handleSendMessage = async () => {
-    if (!chatInput.trim()) return;
-    const msg = chatInput;
-    setChatInput('');
-    setMessages(prev => [...prev, { role: 'user', text: msg }]);
-    setIsLoading(true);
-    native.hapticImpact();
-
-    // Create placeholder for streaming
-    setMessages(prev => [...prev, { role: 'bot', text: '' }]);
-
-    try {
-      let fullText = '';
-      const stream = gemini.chatStream(msg);
-      for await (const chunk of stream) {
-        fullText += chunk.text;
-        setMessages(prev => {
-          const next = [...prev];
-          const lastIndex = next.length - 1;
-          if (next[lastIndex].role === 'bot') {
-            next[lastIndex] = { ...next[lastIndex], text: fullText, grounding: chunk.grounding };
-          }
-          return next;
-        });
+  const applyCanvasFilter = (ctx: CanvasRenderingContext2D, w: number, h: number) => {
+    if (activeFilter === 'horns') {
+      ctx.fillStyle = '#fdb913';
+      ctx.beginPath();
+      ctx.moveTo(w * 0.3, h * 0.3);
+      ctx.quadraticCurveTo(w * 0.2, h * 0.1, w * 0.1, h * 0.2);
+      ctx.lineTo(w * 0.25, h * 0.35);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(w * 0.7, h * 0.3);
+      ctx.quadraticCurveTo(w * 0.8, h * 0.1, w * 0.9, h * 0.2);
+      ctx.lineTo(w * 0.75, h * 0.35);
+      ctx.fill();
+    } else if (activeFilter === 'flag') {
+      ctx.globalAlpha = 0.3;
+      ctx.fillStyle = 'red'; ctx.fillRect(0, 0, w, h/3);
+      ctx.fillStyle = 'blue'; ctx.fillRect(0, (h/3)*2, w, h/3);
+      ctx.fillStyle = 'green';
+      ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(w/2, h/2); ctx.lineTo(0, h); ctx.fill();
+      ctx.globalAlpha = 1.0;
+    } else if (activeFilter === 'sparkles') {
+      for(let i=0; i<30; i++) {
+        ctx.fillStyle = Math.random() > 0.5 ? '#fdb913' : '#004d3d';
+        ctx.beginPath();
+        ctx.arc(Math.random()*w, Math.random()*h, Math.random()*5, 0, Math.PI*2);
+        ctx.fill();
       }
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setIsLoading(false);
     }
   };
 
-  // Live Mode Logic
-  const startLiveMode = async () => {
-    native.hapticImpact();
-    setIsLiveActive(true);
-    
-    try {
-      const inputCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
-      const outputCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
-      audioContextRef.current = outputCtx;
-      
-      const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      
-      const sessionPromise = gemini.connectLive({
-        onopen: () => {
-          const source = inputCtx.createMediaStreamSource(micStream);
-          const scriptProcessor = inputCtx.createScriptProcessor(4096, 1, 1);
-          scriptProcessor.onaudioprocess = (e) => {
-            const inputData = e.inputBuffer.getChannelData(0);
-            const pcmBlob = gemini.createPcmBlob(inputData);
-            sessionPromise.then(session => {
-              session.sendRealtimeInput({ media: pcmBlob });
-            });
-          };
-          source.connect(scriptProcessor);
-          scriptProcessor.connect(inputCtx.destination);
-        },
-        onmessage: async (message) => {
-          const base64Audio = message.serverContent?.modelTurn?.parts[0]?.inlineData?.data;
-          if (base64Audio) {
-            nextStartTimeRef.current = Math.max(nextStartTimeRef.current, outputCtx.currentTime);
-            const buffer = await gemini.decodeAudioData(gemini.decodeAudio(base64Audio), outputCtx, 24000, 1);
-            const source = outputCtx.createBufferSource();
-            source.buffer = buffer;
-            source.connect(outputCtx.destination);
-            source.start(nextStartTimeRef.current);
-            nextStartTimeRef.current += buffer.duration;
-            audioSourcesRef.current.add(source);
-            source.onended = () => audioSourcesRef.current.delete(source);
-          }
-
-          if (message.serverContent?.interrupted) {
-            audioSourcesRef.current.forEach(s => s.stop());
-            audioSourcesRef.current.clear();
-            nextStartTimeRef.current = 0;
-          }
-        },
-        onerror: (e) => console.error("Live Error", e),
-        onclose: () => setIsLiveActive(false),
-      });
-
-      liveSessionRef.current = await sessionPromise;
-    } catch (err) {
-      console.error("Live Audio Failed", err);
-      setIsLiveActive(false);
+  const getTransportIcon = (mode: string) => {
+    switch (mode) {
+      case 'Car': return <Car size={16} />;
+      case 'Bus': return <Bus size={16} />;
+      case 'Train': return <Train size={16} />;
+      case 'Walk': return <Footprints size={16} />;
+      default: return <Navigation size={16} />;
     }
-  };
-
-  const stopLiveMode = () => {
-    if (liveSessionRef.current) {
-      liveSessionRef.current.close();
-      liveSessionRef.current = null;
-    }
-    setIsLiveActive(false);
-    setIsLiveMode(false);
   };
 
   return (
-    <div className="flex flex-col h-full animate-fadeIn px-6 pb-24 space-y-6 relative overflow-hidden">
-      <div className="absolute inset-0 z-0 pointer-events-none">
-        {ATMOSPHERE_IMAGES.map((img, idx) => (
-          <div key={idx} className={`absolute inset-0 transition-opacity duration-[3000ms] ease-in-out ${idx === bgIndex ? 'opacity-20 scale-110' : 'opacity-0 scale-100'}`}>
-            <img src={img} className="w-full h-full object-cover" alt="" aria-hidden="true" />
+    <div className="flex flex-col h-full animate-fadeIn px-6 pb-24 space-y-6 relative overflow-y-auto no-scrollbar">
+      {/* Dynamic Header */}
+      <div className="pt-2 animate-slideUp relative z-10 flex justify-between items-start shrink-0">
+        <div>
+          <div className="flex items-center space-x-2 mb-1">
+            <div className={`px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-widest animate-pulse ${isAdmin ? 'bg-[#004d3d] text-[#fdb913]' : isBrisbane ? 'bg-red-500 text-white' : 'bg-[#fdb913] text-[#004d3d]'}`}>
+              {isAdmin ? 'System: Active' : isBrisbane ? 'Brisbane: Event Live' : 'Global Hub Active'}
+            </div>
+            <span className="text-[10px] font-black uppercase tracking-[0.3em] text-[#004d3d]">
+              {isAdmin ? 'Operations Center' : isBrisbane ? 'Brisbane RWC 2027' : 'BOKFONTEIN Global'}
+            </span>
           </div>
-        ))}
-        <div className="absolute inset-0 bg-gradient-to-b from-[#f8fafc]/50 via-transparent to-[#f8fafc]"></div>
-      </div>
-
-      <div className="pt-2 animate-slideUp relative z-10">
-        <div className="flex items-center space-x-2 mb-1">
-          {greeting.icon}
-          <span className={`text-[10px] font-black uppercase tracking-[0.3em] ${greeting.colorClass}`}>
-            {greeting.text}, {userName.split(' ')[0]}
-          </span>
-        </div>
-        <h2 className="text-4xl font-logo text-[#004d3d] tracking-tighter leading-none">
-          {greeting.text.split(',')[0].toUpperCase()}, <span className="text-[#fdb913]">{userName.split(' ')[0]}!</span> 🇿🇦
-        </h2>
-        <p className="text-[10px] font-bold text-slate-500 mt-2 flex items-center">
-          <MapPin size={10} className="mr-1 text-[#fdb913]" /> {greeting.subtext}
-        </p>
-      </div>
-
-      <div className="relative z-10 bg-white rounded-[32px] p-6 shadow-soft border border-slate-100 overflow-hidden">
-        <div className="absolute top-0 right-0 w-32 h-32 bg-[#004d3d]/5 rounded-full -mr-16 -mt-16 blur-2xl"></div>
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center space-x-2">
-            <Trophy size={16} className="text-[#fdb913]" />
-            <span className="text-[10px] font-black text-[#004d3d] uppercase tracking-widest">{match.isLive ? 'Live: Heritage Test' : 'Match Finished'}</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <span className={`w-2 h-2 ${match.isLive ? 'bg-red-500 animate-pulse' : 'bg-slate-300'} rounded-full`}></span>
-            <span className={`text-[10px] font-black ${match.isLive ? 'text-red-500' : 'text-slate-400'} uppercase tracking-widest`}>{match.time}'</span>
-          </div>
+          <h2 className="text-4xl font-logo text-[#004d3d] tracking-tighter leading-none">
+            {isAdmin ? 'AWEH' : 'HOWZIT'}, <span className="text-[#fdb913]">{isAdmin ? 'ADMIN' : userName.split(' ')[0]}!</span> 🇿🇦
+          </h2>
         </div>
 
-        <div className="flex items-center justify-between px-2">
-          <div className="flex flex-col items-center space-y-2">
-            <div className="w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center border border-slate-100 shadow-sm overflow-hidden">
-               <img src="https://flagcdn.com/w160/za.png" className="w-full h-full object-cover opacity-80" alt="SA" />
-            </div>
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Springboks</span>
-            <span className="text-3xl font-black text-[#004d3d]">{match.score.sa}</span>
-          </div>
-          <div className="flex flex-col items-center">
-            <div className="text-[8px] font-black text-slate-300 uppercase tracking-[0.3em] mb-4">VS</div>
-            <div className="w-16 h-1 bg-slate-100 rounded-full overflow-hidden">
-               <div className="h-full bg-[#004d3d] transition-all duration-1000" style={{ width: `${match.momentum}%` }}></div>
-            </div>
-          </div>
-          <div className="flex flex-col items-center space-y-2">
-            <div className="w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center border border-slate-100 shadow-sm overflow-hidden">
-               <img src="https://flagcdn.com/w160/nz.png" className="w-full h-full object-cover opacity-80" alt="NZ" />
-            </div>
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">All Blacks</span>
-            <span className="text-3xl font-black text-[#004d3d]">{match.score.nz}</span>
-          </div>
-        </div>
-
-        <div className="mt-8 pt-6 border-t border-slate-50">
-          <div className="flex items-start space-x-3">
-             <div className="p-2 bg-slate-50 rounded-xl text-[#004d3d]">
-               <Activity size={16} />
+        {/* Weather Widget */}
+        {weather && (
+          <div className="bg-white/40 backdrop-blur-md rounded-2xl p-3 border border-white/50 shadow-sm text-right flex flex-col items-end">
+             <div className="flex items-center space-x-1.5 text-[#004d3d]">
+                <ThermometerSun size={14} className="text-[#fdb913]" />
+                <span className="text-xs font-black">{weather.temp}</span>
              </div>
-             <div>
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">{match.isLive ? `${match.time}' LIVE UPDATE` : 'RESULT'}</p>
-                <p className="text-xs font-bold text-slate-700 leading-relaxed">{match.lastEvent}</p>
-             </div>
+             <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mt-0.5">{weather.condition}</p>
+          </div>
+        )}
+      </div>
+
+      {/* Primary Dashboard Card (Unified) */}
+      <section className="bg-white rounded-[40px] p-1 shadow-luxury border border-slate-50 overflow-hidden shrink-0">
+        <div className="p-8">
+          <div className="flex justify-between items-start mb-6">
+            <div>
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">{isBrisbane ? 'Your Itinerary, boet' : 'Global Hub Status'}</p>
+              <h3 className="text-2xl font-black font-heading text-[#004d3d] leading-none">{isBrisbane ? 'Legends Deck Hub' : 'Mzansi Fan Portal'}</h3>
+            </div>
+            <div className="p-3 bg-amber-50 text-[#fdb913] rounded-2xl">
+              <Clock size={24} />
+            </div>
+          </div>
+          <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center space-x-3">
+              <div className="flex -space-x-3">
+                <img src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=100" className="w-8 h-8 rounded-full border-2 border-white" alt="" />
+                <img src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=100" className="w-8 h-8 rounded-full border-2 border-white" alt="" />
+                <div className="w-8 h-8 rounded-full border-2 border-white bg-slate-100 flex items-center justify-center text-[8px] font-black text-slate-400">+120</div>
+              </div>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">{isBrisbane ? 'The Gees is high at Suncorp!' : 'Saffas are gathering nearby!'}</span>
+            </div>
+            {isAdmin && (
+              <button 
+                onClick={() => onNavigateToTab?.('admin')}
+                className="bg-[#004d3d] text-[#fdb913] px-3 py-1.5 rounded-xl text-[8px] font-black uppercase tracking-widest shadow-sm flex items-center space-x-1.5"
+              >
+                <Shield size={10} />
+                <span>Command Center</span>
+              </button>
+            )}
+          </div>
+          <button 
+            onClick={() => onNavigateToTab?.('experiences')}
+            className="w-full bg-[#004d3d] text-[#fdb913] py-5 rounded-[28px] font-black uppercase text-xs tracking-[0.2em] shadow-lg flex items-center justify-center space-x-3 active:scale-95 transition-all"
+          >
+            <Ticket size={18} />
+            <span>{isBrisbane ? 'Show my Virtual Pass' : 'Explore Elite Events'}</span>
+          </button>
+        </div>
+        <div className="bg-slate-50 p-6 flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <ShoppingBag size={18} className="text-[#004d3d]" />
+            <p className="text-[10px] font-black text-[#004d3d] uppercase tracking-widest">Lekker Shop: {isBrisbane ? '20% Off Merch' : 'New Fan Packs Available'}</p>
+          </div>
+          <ChevronRight size={14} className="text-slate-300" />
+        </div>
+      </section>
+
+      {/* RE-OPTIMIZED: Live Social Pulse Section - FIXED FOR ALL SCREENS */}
+      <section 
+        onClick={() => onNavigateToTab?.('community')}
+        className="bg-white rounded-[40px] px-4 py-8 sm:px-8 shadow-soft border border-slate-100 relative overflow-hidden group cursor-pointer active:scale-95 transition-all w-full"
+      >
+        <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-[#fdb913]/10 to-transparent rounded-full -mr-12 -mt-12 blur-2xl"></div>
+        
+        <div className="relative z-10 w-full flex flex-col items-center">
+          
+          {/* Header Block: Centered and Non-Cutting */}
+          <div className="w-full flex flex-col items-center justify-center mb-6">
+            <div className="flex items-center justify-center space-x-2 w-full max-w-full">
+              <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.5)] shrink-0"></div>
+              <h3 className="text-base sm:text-lg font-black font-heading text-[#004d3d] leading-tight text-center uppercase tracking-tight">
+                LIVE SOCIAL PULSE
+              </h3>
+            </div>
+            <p className="text-[8px] sm:text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1.5 text-center">
+              Global Diaspora Hub
+            </p>
+          </div>
+
+          {/* Social Snippets: Centered and Wrapping Properly */}
+          <div className="w-full space-y-3 mb-6">
+            {livePosts.length > 0 ? (
+              livePosts.map(post => (
+                <div key={post.id} className="flex justify-center w-full animate-slideUp">
+                  <div className="flex items-center space-x-3 w-full max-w-xs sm:max-w-sm">
+                    <img src={post.userAvatar} className="w-8 h-8 rounded-full border-2 border-slate-50 shadow-sm shrink-0" alt="" />
+                    <div className="bg-[#fdb913]/5 border border-[#fdb913]/10 px-4 py-2.5 rounded-[20px] flex-1 min-w-0">
+                      <p className="text-[10px] sm:text-[11px] text-[#004d3d] font-bold italic leading-snug text-center break-words">
+                        "{post.content}"
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="py-4 flex flex-col items-center justify-center space-y-2 opacity-30 w-full">
+                <MessageSquare size={24} className="text-[#004d3d]" />
+                <p className="text-[9px] font-black uppercase tracking-widest text-center">Awaiting gees...</p>
+              </div>
+            )}
+          </div>
+          
+          {/* CTA: Centered Button */}
+          <div className="bg-[#004d3d]/5 px-5 py-2.5 rounded-full flex items-center justify-center space-x-2 hover:bg-[#004d3d]/10 transition-colors border border-[#004d3d]/5 w-fit">
+             <span className="text-[8px] sm:text-[9px] font-black text-[#004d3d] uppercase tracking-widest text-center">Join the Fan Vibe</span>
+             <ChevronRight size={12} className="text-[#fdb913]" />
           </div>
         </div>
-      </div>
+      </section>
 
-      <div className="grid grid-cols-2 gap-4 relative z-10">
-        <button onClick={() => { setIsVisionOpen(true); native.hapticImpact(); }} className="flex flex-col items-center justify-center p-8 bg-[#004d3d] text-[#fdb913] rounded-[40px] shadow-xl active:scale-95 transition-all group border border-white/10">
-          <div className="w-16 h-16 bg-white/10 rounded-3xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform"><Camera size={32} /></div>
-          <span className="font-black text-xs uppercase tracking-widest">Bok Gees Vision</span>
-        </button>
-        <button onClick={() => { setIsChatOpen(true); native.hapticImpact(); }} className="flex flex-col items-center justify-center p-8 bg-white text-[#004d3d] rounded-[40px] shadow-lg border border-slate-100 active:scale-95 transition-all group">
-          <div className="w-16 h-16 bg-[#004d3d]/5 rounded-3xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform"><Sparkles size={32} /></div>
-          <span className="font-black text-xs uppercase tracking-widest">Elite Concierge</span>
-        </button>
-      </div>
+      {/* Match Day Journeys Section */}
+      <section className="bg-white rounded-[40px] p-8 shadow-soft border border-slate-100 space-y-6">
+        <div className="flex justify-between items-center">
+          <div>
+            <h3 className="text-xl font-black font-heading text-[#004d3d]">Match Day Journeys</h3>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Get to the gees on time, bru!</p>
+          </div>
+          <button 
+            onClick={() => { setShowJourneyModal(true); native.hapticImpact(); }}
+            className="w-10 h-10 bg-[#fdb913] text-[#004d3d] rounded-2xl flex items-center justify-center shadow-lg active:scale-90 transition-all"
+          >
+            <Plus size={20} strokeWidth={3} />
+          </button>
+        </div>
 
-      {/* MODAL: BOK GEES VISION */}
-      {isVisionOpen && (
-        <div className="fixed inset-0 z-[2000] bg-black/80 backdrop-blur-xl flex items-center justify-center p-6 animate-fadeIn">
-          <div className="bg-white w-full max-w-sm rounded-[48px] p-8 shadow-luxury animate-scaleIn relative overflow-hidden flex flex-col max-h-[85vh]">
+        {journeys.length === 0 ? (
+          <div className="py-8 text-center bg-slate-50 rounded-[32px] border border-dashed border-slate-200">
+            <Navigation className="mx-auto text-slate-300 mb-3" size={32} />
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">No journeys planned yet, boet.</p>
             <button 
-              onClick={() => { 
-                setIsVisionOpen(false); 
-                setVisionImage(null); 
-                setVisionFeedback(null); 
-                stopCamera();
-              }} 
-              className="absolute top-6 right-6 text-slate-300 p-2 z-20"
+              onClick={() => setShowJourneyModal(true)}
+              className="mt-4 text-[10px] font-black text-[#004d3d] uppercase tracking-[0.2em] underline"
             >
-              <X size={24} />
+              Plan your route
             </button>
-            <div className="mb-6 shrink-0">
-              <h3 className="text-2xl font-black font-heading text-[#004d3d] mb-1">Bok Gees Vision</h3>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">AI AR Analyzer</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {journeys.map(j => (
+              <div key={j.id} className="bg-slate-50 p-5 rounded-[32px] border border-slate-100 flex items-center justify-between animate-scaleIn">
+                <div className="flex items-center space-x-4">
+                  <div className="w-12 h-12 bg-white rounded-2xl shadow-sm flex items-center justify-center text-[#004d3d]">
+                    {getTransportIcon(j.transport)}
+                  </div>
+                  <div>
+                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{j.transport} Journey</p>
+                    <h4 className="text-xs font-black text-[#004d3d] uppercase truncate max-w-[150px]">{j.start} → {j.destination}</h4>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="text-[9px] font-black text-[#fdb913] bg-[#004d3d] px-2 py-1 rounded-lg uppercase tracking-widest">Active</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Dynamic Pulse Card */}
+      <section 
+        onClick={() => onNavigateToTab?.('green_mile')}
+        className="relative h-48 rounded-[40px] overflow-hidden shadow-soft border border-slate-100 group cursor-pointer shrink-0"
+      >
+        <img 
+          src={isBrisbane ? "https://images.unsplash.com/photo-1533107862482-0e6974b06ec4?q=80&w=800" : "https://images.unsplash.com/photo-1524661135-423995f22d0b?q=80&w=800"} 
+          className="absolute inset-0 w-full h-full object-cover grayscale opacity-20 group-hover:scale-110 transition-transform duration-700" 
+          alt="" 
+        />
+        <div className="absolute inset-0 bg-gradient-to-br from-white via-white/40 to-transparent"></div>
+        <div className="relative z-10 p-8 h-full flex flex-col justify-between">
+          <div>
+            <div className="flex items-center space-x-2 mb-2">
+              <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+              <p className="text-[9px] font-black text-red-500 uppercase tracking-widest">Live Pulse</p>
             </div>
-            <div className="w-full aspect-square bg-slate-50 rounded-[32px] border-2 border-dashed border-slate-200 flex flex-col items-center justify-center relative overflow-hidden group mb-6 shrink-0">
-               {isCameraActive ? (
-                 <div className="relative w-full h-full">
-                   <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover scale-x-[-1]" style={{ filter: selectedFilter.filterClass }} />
-                   {selectedFilter.overlay}
-                   <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center space-x-6">
-                      <button onClick={capturePhoto} className="w-16 h-16 bg-white rounded-full border-4 border-[#004d3d] shadow-lg flex items-center justify-center active:scale-90 transition-all">
-                        <div className="w-12 h-12 bg-[#004d3d] rounded-full"></div>
-                      </button>
-                   </div>
-                 </div>
-               ) : visionImage ? (
-                 <div className="relative w-full h-full">
-                    <img src={visionImage} className="w-full h-full object-cover" alt="Gees Capture" />
-                    <button onClick={() => { setVisionImage(null); setVisionFeedback(null); startCamera(); }} className="absolute top-4 right-4 bg-white/20 backdrop-blur-md p-2 rounded-xl text-white">
-                      <RotateCcw size={18} />
+            <h3 className="text-2xl font-black font-heading text-[#004d3d]">{isBrisbane ? 'The Green Mile' : 'Mzansi Fan Pulse'}</h3>
+          </div>
+          <div className="flex items-center space-x-4">
+             <div className="flex items-center space-x-2">
+               <Users size={16} className="text-[#004d3d]" />
+               <span className="text-[10px] font-black text-[#004d3d] uppercase tracking-widest">{isBrisbane ? 'High Gees Hubs Nearby' : 'Global Fan Hubs Live'}</span>
+             </div>
+             <ChevronRight size={16} className="text-slate-300" />
+          </div>
+        </div>
+      </section>
+
+      {/* Bok Gees Vision & Concierge Buttons */}
+      <div className="grid grid-cols-2 gap-4 relative z-10 shrink-0">
+        <button onClick={startBokLens} className="flex flex-col items-center justify-center p-8 bg-[#004d3d] text-[#fdb913] rounded-[40px] shadow-xl active:scale-95 transition-all group border border-white/10">
+          <div className="w-16 h-16 bg-white/10 rounded-3xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform"><Camera size={32} /></div>
+          <span className="font-black text-xs uppercase tracking-widest text-center">Scan my Gees</span>
+        </button>
+        <button onClick={() => { native.hapticImpact(); onOpenChat?.(); }} className="flex flex-col items-center justify-center p-8 bg-white text-[#004d3d] rounded-[40px] shadow-lg border border-slate-100 active:scale-95 transition-all group">
+          <div className="w-16 h-16 bg-[#004d3d]/5 rounded-3xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform"><MessageSquare size={32} /></div>
+          <span className="font-black text-xs uppercase tracking-widest text-center">Ask BOK-CONCIERGE</span>
+        </button>
+      </div>
+
+      {/* MODALS */}
+
+      {/* Journey Modal */}
+      {showJourneyModal && (
+        <div className="fixed inset-0 z-[10001] bg-black/80 backdrop-blur-xl flex items-center justify-center p-6 animate-fadeIn">
+          <div className="bg-white rounded-[48px] p-10 shadow-luxury max-w-sm w-full animate-scaleIn relative overflow-hidden">
+            <button onClick={() => setShowJourneyModal(false)} className="absolute top-6 right-6 text-slate-300"><X size={28} /></button>
+            <div className="w-20 h-20 bg-[#004d3d] rounded-3xl flex items-center justify-center text-[#fdb913] mb-8 shadow-xl">
+              <Navigation size={40} />
+            </div>
+            <h3 className="text-2xl font-black font-heading text-[#004d3d] mb-2">Plan Your Trek</h3>
+            <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-8">Match Day Logistics</p>
+            
+            <div className="space-y-4 mb-10">
+              <div className="space-y-1.5">
+                <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-3">Starting From</label>
+                <input 
+                  type="text" 
+                  placeholder="e.g. Hotel / Airport"
+                  className="w-full bg-slate-50 border-none rounded-2xl px-5 py-3.5 text-xs font-bold text-[#004d3d] outline-none shadow-sm"
+                  value={newJourney.start}
+                  onChange={e => setNewJourney({...newJourney, start: e.target.value})}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-3">Destination</label>
+                <input 
+                  type="text" 
+                  placeholder="e.g. Suncorp Stadium"
+                  className="w-full bg-slate-50 border-none rounded-2xl px-5 py-3.5 text-xs font-bold text-[#004d3d] outline-none shadow-sm"
+                  value={newJourney.destination}
+                  onChange={e => setNewJourney({...newJourney, destination: e.target.value})}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-3">Preferred Mode</label>
+                <div className="grid grid-cols-4 gap-2">
+                  {(['Car', 'Bus', 'Train', 'Walk'] as const).map(mode => (
+                    <button 
+                      key={mode}
+                      onClick={() => setNewJourney({...newJourney, transport: mode})}
+                      className={`flex flex-col items-center justify-center p-3 rounded-2xl transition-all border ${newJourney.transport === mode ? 'bg-[#004d3d] text-[#fdb913] border-[#004d3d] shadow-md' : 'bg-slate-50 text-slate-400 border-slate-100'}`}
+                    >
+                      {getTransportIcon(mode)}
+                      <span className="text-[7px] font-black uppercase mt-1.5">{mode}</span>
                     </button>
-                 </div>
-               ) : (
-                 <div className="flex flex-col items-center space-y-6">
-                    <div className="w-20 h-20 bg-white rounded-[24px] shadow-sm flex items-center justify-center text-[#004d3d] group-hover:scale-110 transition-transform">
-                      <Camera size={36} />
-                    </div>
-                    <div className="flex flex-col space-y-3 w-full px-8">
-                      <button onClick={startCamera} className="w-full py-3 bg-[#004d3d] text-[#fdb913] rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg flex items-center justify-center space-x-2">
-                        <Camera size={16} /> <span>Open Live Camera</span>
-                      </button>
-                      <button onClick={() => fileInputRef.current?.click()} className="w-full py-3 bg-white border border-slate-200 text-slate-400 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center space-x-2">
-                        <ImageIcon size={16} /> <span>Upload Photo</span>
-                      </button>
-                    </div>
-                 </div>
-               )}
-               <input type="file" ref={fileInputRef} onChange={handleVisionCapture} className="hidden" accept="image/*" />
-               <canvas ref={canvasRef} className="hidden" />
-            </div>
-            <div className="flex-1 overflow-y-auto no-scrollbar pb-10">
-              {isAnalyzing && (
-                <div className="py-8 flex flex-col items-center space-y-3 animate-fadeIn">
-                  <Loader2 size={32} className="text-[#004d3d] animate-spin" />
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">BokBot is assessing...</p>
+                  ))}
                 </div>
-              )}
-              {visionFeedback && (
-                <div className="p-6 bg-[#004d3d]/5 rounded-[24px] border border-[#004d3d]/10 animate-slideUp">
-                   <div className="flex items-center space-x-2 mb-3">
-                     <CheckCircle2 size={16} className="text-[#004d3d]" />
-                     <p className="text-[10px] font-black text-[#004d3d] uppercase tracking-widest">Gees Report</p>
-                   </div>
-                   <p className="text-xs font-medium text-slate-600 leading-relaxed italic">"{visionFeedback}"</p>
-                </div>
-              )}
+              </div>
             </div>
+
+            <button 
+              onClick={handleAddJourney}
+              className="w-full bg-[#004d3d] text-[#fdb913] py-5 rounded-[28px] font-black uppercase text-xs tracking-widest shadow-luxury active:scale-95 transition-all"
+            >
+              Secure My Journey
+            </button>
           </div>
         </div>
       )}
 
-      {/* MODAL: ELITE CONCIERGE */}
-      {isChatOpen && (
-        <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
-          <div className="bg-[#f8fafc] w-full max-w-sm rounded-[48px] shadow-luxury animate-scaleIn relative overflow-hidden flex flex-col h-[75vh] border border-white/50">
-            <header className="p-6 bg-[#004d3d] text-white flex items-center justify-between rounded-b-[40px] shadow-lg shrink-0">
-               <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center border border-white/10"><Sparkles className="text-[#fdb913]" size={20} /></div>
-                  <div className="flex flex-col">
-                    <h3 className="font-black text-base font-heading leading-tight">{isLiveMode ? 'Live Gees' : 'Elite Concierge'}</h3>
-                    <p className="text-[8px] font-black text-[#fdb913] uppercase tracking-widest">{isLiveActive ? 'Live Connection' : 'Ready to help'}</p>
-                  </div>
-               </div>
-               <div className="flex items-center space-x-2">
-                 <button 
-                   onClick={() => { setIsLiveMode(!isLiveMode); if(isLiveActive) stopLiveMode(); }}
-                   className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isLiveMode ? 'bg-[#fdb913] text-[#004d3d]' : 'bg-white/10 text-white'}`}
-                 >
-                   <Mic size={20} />
-                 </button>
-                 <button onClick={() => { stopLiveMode(); setIsChatOpen(false); }} className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center active:scale-90 transition-all">
-                   <X size={20} />
-                 </button>
-               </div>
-            </header>
-            
-            <div className="flex-1 overflow-y-auto p-5 space-y-4 no-scrollbar bg-slate-50/50">
-              {isLiveMode ? (
-                <div className="h-full flex flex-col items-center justify-center space-y-8 animate-fadeIn">
-                   <div className="relative">
-                      <div className={`w-32 h-32 rounded-full bg-[#004d3d] flex items-center justify-center shadow-2xl ${isLiveActive ? 'animate-pulse' : ''}`}>
-                         <Radio size={48} className="text-[#fdb913]" />
-                      </div>
-                      {isLiveActive && (
-                        <div className="absolute inset-0 rounded-full border-4 border-[#fdb913] animate-ping opacity-20"></div>
-                      )}
-                   </div>
-                   <div className="text-center space-y-2">
-                      <h4 className="text-lg font-black text-[#004d3d] uppercase tracking-tight">{isLiveActive ? 'Streaming Gees' : 'Ready for Voice Mode'}</h4>
-                      <p className="text-xs text-slate-400 font-bold px-12">"Aweh! Just start talking to BokBot, bru. I'm listening."</p>
-                   </div>
-                   {!isLiveActive ? (
-                     <button onClick={startLiveMode} className="bg-[#fdb913] text-[#004d3d] px-12 py-4 rounded-[24px] font-black uppercase text-xs tracking-widest shadow-xl active:scale-95 transition-all">Connect Voice</button>
-                   ) : (
-                     <button onClick={stopLiveMode} className="bg-red-500 text-white px-12 py-4 rounded-[24px] font-black uppercase text-xs tracking-widest shadow-xl active:scale-95 transition-all">End Session</button>
-                   )}
+      {/* ANALYSIS RESULT MODAL */}
+      {analysisResult && (
+        <div className="fixed inset-0 z-[10001] bg-black/80 backdrop-blur-xl flex items-center justify-center p-8 animate-fadeIn">
+          <div className="bg-white rounded-[48px] p-10 shadow-luxury max-w-sm w-full animate-scaleIn relative">
+            <button onClick={() => setAnalysisResult(null)} className="absolute top-6 right-6 text-slate-300"><X size={28} /></button>
+            <div className="w-20 h-20 bg-[#004d3d] rounded-3xl flex items-center justify-center text-[#fdb913] mb-8 shadow-xl">
+              <Sparkles size={40} />
+            </div>
+            <h3 className="text-2xl font-black font-heading text-[#004d3d] mb-4">Gees Report</h3>
+            <p className="text-slate-600 text-sm leading-relaxed mb-8 italic">"{analysisResult}"</p>
+            <div className="flex items-center space-x-3 bg-slate-50 p-4 rounded-2xl mb-8">
+              <ZapIcon size={18} className="text-[#fdb913]" />
+              <span className="text-[10px] font-black uppercase text-[#004d3d]">Gees Level: PROUDLY SAFFA</span>
+            </div>
+            <button onClick={() => setAnalysisResult(null)} className="w-full bg-[#004d3d] text-[#fdb913] py-4 rounded-2xl font-black uppercase text-xs tracking-widest shadow-lg">Lekker, Boet!</button>
+          </div>
+        </div>
+      )}
+
+      {/* BOK LENS MODAL */}
+      {showBokLens && (
+        <div className="fixed inset-0 z-[10001] bg-black flex flex-col animate-fadeIn">
+          <div className="flex-1 relative overflow-hidden bg-black flex items-center justify-center">
+            <video 
+              ref={videoRef} 
+              autoPlay 
+              playsInline 
+              className="w-full h-full object-cover mirror-mode"
+              style={{ transform: 'scaleX(-1)' }}
+            />
+            <div className="absolute inset-0 pointer-events-none">
+              {activeFilter === 'horns' && (
+                <div className="flex justify-around pt-20 px-10">
+                  <div className="w-20 h-24 bg-[#fdb913] rounded-t-full rotate-[-30deg]"></div>
+                  <div className="w-20 h-24 bg-[#fdb913] rounded-t-full rotate-[30deg]"></div>
                 </div>
-              ) : (
-                <>
-                  {messages.map((m, i) => (
-                    <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-scaleIn`}>
-                      <div className={`max-w-[85%] p-4 rounded-[28px] ${m.role === 'user' ? 'bg-[#004d3d] text-white rounded-tr-none shadow-md' : 'bg-white border border-slate-100 text-slate-800 rounded-tl-none shadow-soft'}`}>
-                        <p className="text-xs font-medium leading-relaxed">{m.text || (i === messages.length - 1 && isLoading ? "..." : "")}</p>
-                        {m.grounding && m.grounding.length > 0 && (
-                          <div className="mt-3 pt-2 border-t border-slate-50 space-y-1.5">
-                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Grounded Info:</p>
-                            {m.grounding.map((chunk, idx) => (
-                              <a key={idx} href={chunk.web?.uri || chunk.maps?.uri} target="_blank" rel="noopener noreferrer" className="flex items-center space-x-2 text-[#004d3d] hover:underline bg-slate-50 p-1.5 rounded-lg border border-slate-100">
-                                <ExternalLink size={8} className="shrink-0" />
-                                <span className="text-[8px] font-bold truncate">{chunk.web?.title || chunk.maps?.title || "Visit Source"}</span>
-                              </a>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                  {isLoading && messages[messages.length-1].text === '' && (
-                    <div className="flex justify-start">
-                       <div className="p-3 bg-white rounded-xl shadow-sm border border-slate-50">
-                          <Loader2 className="animate-spin text-[#004d3d]" size={16} />
-                       </div>
-                    </div>
-                  )}
-                  <div ref={chatEndRef} />
-                </>
+              )}
+              {activeFilter === 'flag' && (
+                <div className="absolute inset-0 opacity-30 mix-blend-overlay flex flex-col">
+                   <div className="flex-1 bg-red-600"></div>
+                   <div className="flex-1 bg-blue-600"></div>
+                </div>
+              )}
+              {activeFilter === 'sparkles' && (
+                <div className="absolute inset-0">
+                  <div className="animate-pulse absolute top-1/4 left-1/4"><Sparkles className="text-[#fdb913]" size={40} /></div>
+                  <div className="animate-pulse absolute bottom-1/4 right-1/4 delay-100"><Sparkles className="text-[#004d3d]" size={60} /></div>
+                </div>
               )}
             </div>
+            <button onClick={closeBokLens} className="absolute top-10 right-6 text-white p-2 bg-black/20 backdrop-blur-md rounded-full"><X size={28} /></button>
+          </div>
+          <div className="bg-[#004d3d] p-8 pb-12 rounded-t-[48px] space-y-8 shadow-luxury relative z-10">
+            <div className="flex space-x-4 overflow-x-auto no-scrollbar pb-2">
+              <FilterIcon active={activeFilter === 'none'} onClick={() => setActiveFilter('none')} icon={<Camera size={20} />} label="Raw" />
+              <FilterIcon active={activeFilter === 'horns'} onClick={() => setActiveFilter('horns')} icon={<Flame size={20} />} label="Horns" />
+              <FilterIcon active={activeFilter === 'flag'} onClick={() => setActiveFilter('flag')} icon={<MapPin size={20} />} label="Flag" />
+              <FilterIcon active={activeFilter === 'sparkles'} onClick={() => setActiveFilter('sparkles')} icon={<Sparkles size={20} />} label="Gees" />
+            </div>
+            <div className="flex justify-center items-center">
+              <button 
+                onClick={captureGees}
+                className="w-20 h-20 rounded-full border-4 border-white flex items-center justify-center p-1 active:scale-90 transition-all shadow-luxury"
+              >
+                <div className="w-full h-full bg-[#fdb913] rounded-full"></div>
+              </button>
+            </div>
+            <p className="text-center text-[10px] font-black text-white/40 uppercase tracking-[0.3em]">Tap to Scan your Gees, Bru</p>
+          </div>
+          <canvas ref={canvasRef} className="hidden" />
+        </div>
+      )}
 
-            {!isLiveMode && (
-              <div className="p-5 bg-white border-t border-slate-100 shrink-0">
-                <div className="flex items-center space-x-2 bg-slate-50 p-1.5 rounded-[24px] border border-slate-100 focus-within:ring-2 focus-within:ring-[#004d3d]/5 transition-all">
-                  <input 
-                    type="text" 
-                    value={chatInput} 
-                    onChange={e => setChatInput(e.target.value)} 
-                    onKeyPress={e => e.key === 'Enter' && handleSendMessage()} 
-                    placeholder="Ask BokBot anything..." 
-                    className="flex-1 bg-transparent px-4 py-2 text-xs outline-none font-medium text-slate-800"
-                    autoFocus
-                  />
-                  <button onClick={handleSendMessage} disabled={!chatInput.trim() || isLoading} className="w-10 h-10 bg-[#004d3d] text-[#fdb913] rounded-xl flex items-center justify-center shadow-md active:scale-95 transition-all disabled:opacity-50">
-                    {isLoading ? <RefreshCw className="animate-spin" size={16} /> : <Send size={16} />}
-                  </button>
-                </div>
-                <p className="text-[7px] text-center text-slate-300 font-black uppercase tracking-widest mt-2">Streaming via Gemini AI 🇿🇦</p>
-              </div>
-            )}
+      {/* LOADING OVERLAY */}
+      {isAnalyzing && (
+        <div className="fixed inset-0 z-[10002] bg-black/40 backdrop-blur-sm flex items-center justify-center">
+          <div className="flex flex-col items-center space-y-4">
+            <div className="w-16 h-16 border-4 border-[#fdb913] border-t-transparent rounded-full animate-spin"></div>
+            <p className="text-white text-[10px] font-black uppercase tracking-widest">Checking your Vibe, my bru...</p>
           </div>
         </div>
       )}
     </div>
   );
 };
+
+const FilterIcon: React.FC<{ active: boolean, onClick: () => void, icon: React.ReactNode, label: string }> = ({ active, onClick, icon, label }) => (
+  <button 
+    onClick={onClick}
+    className={`flex flex-col items-center shrink-0 space-y-1 transition-all ${active ? 'scale-110' : 'opacity-40'}`}
+  >
+    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center border-2 ${active ? 'bg-[#fdb913] border-white text-[#004d3d]' : 'bg-white/10 border-white/10 text-white'}`}>
+      {icon}
+    </div>
+    <span className="text-[8px] font-black uppercase text-white tracking-widest">{label}</span>
+  </button>
+);
 
 export default Home;

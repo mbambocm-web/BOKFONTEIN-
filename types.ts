@@ -1,6 +1,8 @@
+
 export enum AppTab {
   HOME = 'home',
   EXPERIENCES = 'experiences',
+  GREEN_MILE = 'green_mile',
   COMMUNITY = 'community',
   PROFILE = 'profile',
   WALLET = 'wallet',
@@ -18,7 +20,7 @@ export interface Transaction {
 export interface Experience {
   id: string;
   title: string;
-  type: 'One Match' | 'Two Match' | 'Full Group Stage';
+  type: 'One Match' | 'Two Match' | 'Full Group Stage' | 'VIP Hospitality';
   pricePPS: number;
   priceSingle: number;
   location: string;
@@ -26,6 +28,42 @@ export interface Experience {
   endDate: string;
   image: string;
   features: string[];
+  status?: 'active' | 'paused';
+}
+
+export interface Booking {
+  id: string;
+  userId: string;
+  experienceId: string;
+  experienceTitle: string;
+  experienceImage: string;
+  location: string;
+  date: string;
+  bookingRef: string;
+  status: 'Purchased' | 'Wishlisted';
+  amount: number;
+}
+
+export interface LegendBio {
+  name: string;
+  caps: number;
+  position: string;
+  notableMoment: string;
+  avatar: string;
+}
+
+export interface FanZoneHub {
+  id: string;
+  name: string;
+  density: number; // 0-100
+  vibe: 'Chill' | 'Singing' | 'High Gees' | 'Family';
+  deals: string[];
+  lat: number;
+  lng: number;
+  image?: string;
+  description?: string;
+  status?: 'active' | 'paused';
+  contactPerson?: string;
 }
 
 export interface AppNotification {
@@ -52,6 +90,7 @@ export interface Member {
   avatar: string;
   role: 'member' | 'admin';
   blockedUsers: string[];
+  checkIns: string[];
 }
 
 export interface VibePost {
@@ -64,13 +103,21 @@ export interface VibePost {
   likes: string[];
 }
 
+export interface MatchState {
+  score: { sa: number, nz: number };
+  time: number;
+  momentum: number;
+  lastEvent: string;
+  isLive: boolean;
+}
+
 export interface Reward {
   id: string;
   title: string;
   cost: number;
   description: string;
   icon: string;
-  category: 'Braai' | 'Merch' | 'Experience';
+  category: string;
 }
 
 export interface ContentReport {
@@ -84,12 +131,10 @@ export interface ContentReport {
   status: 'pending' | 'resolved' | 'dismissed';
 }
 
-export type BokActivity = 'post' | 'purchase' | 'topup' | 'chat' | 'checkin';
-
-export interface MatchState {
-  score: { sa: number, nz: number };
-  time: number;
-  momentum: number;
-  lastEvent: string;
-  isLive: boolean;
+export interface BokActivity {
+  id: string;
+  userId: string;
+  type: 'post' | 'like' | 'purchase' | 'checkin' | 'topup';
+  timestamp: string;
+  pointsEarned: number;
 }

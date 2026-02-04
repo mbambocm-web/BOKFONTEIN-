@@ -1,3 +1,4 @@
+
 /**
  * NativeService Bridge
  * Provides a unified interface for Haptics and Device features.
@@ -8,13 +9,18 @@ export class NativeService {
   private isNative: boolean;
 
   constructor() {
-    // Basic detection for Capacitor runtime
     this.isNative = (window as any).Capacitor !== undefined;
+    this.initPlatform();
+  }
+
+  private async initPlatform() {
+    if (this.isNative) {
+      await this.setStatusBarColor('#004d3d', true);
+    }
   }
 
   /**
    * Triggers a light physical impact vibration
-   * Ideal for button taps and UI interactions
    */
   async hapticImpact() {
     if (this.isNative) {
@@ -23,14 +29,12 @@ export class NativeService {
         await Haptics.impact({ style: ImpactStyle.Light });
       }
     } else if ('vibrate' in navigator) {
-      // Web fallback
       navigator.vibrate(10);
     }
   }
 
   /**
    * Triggers a success notification pattern
-   * Ideal for payments, order confirmations, or Bok points earned
    */
   async hapticSuccess() {
     if (this.isNative) {
@@ -39,20 +43,39 @@ export class NativeService {
         await Haptics.notification({ type: NotificationType.Success });
       }
     } else if ('vibrate' in navigator) {
-      // Web fallback: Short double pulse
       navigator.vibrate([15, 30, 15]);
     }
   }
 
   /**
-   * Sets the status bar color (for Android/iOS)
+   * Triggers an error notification pattern
+   */
+  async hapticError() {
+    if (this.isNative) {
+      const { Haptics, NotificationType } = (window as any).Capacitor.Plugins;
+      if (Haptics) {
+        await Haptics.notification({ type: NotificationType.Error });
+      }
+    } else if ('vibrate' in navigator) {
+      navigator.vibrate([50, 100, 50, 100]);
+    }
+  }
+
+  /**
+   * Sets the status bar color
    */
   async setStatusBarColor(color: string = '#004d3d', isDark: boolean = true) {
     if (this.isNative) {
-      const { StatusBar, Style } = (window as any).Capacitor.Plugins;
+      const { StatusBar } = (window as any).Capacitor.Plugins;
       if (StatusBar) {
-        await StatusBar.setBackgroundColor({ color });
-        await StatusBar.setStyle({ style: isDark ? 'DARK' : 'LIGHT' });
+        try {
+          await StatusBar.setBackgroundColor({ color });
+          // Note: In Capacitor 5+ setStyle uses an object
+          const { Style } = (window as any).Capacitor.Plugins.StatusBar;
+          await StatusBar.setStyle({ style: isDark ? 'DARK' : 'LIGHT' });
+        } catch (e) {
+          console.warn("StatusBar plugin error:", e);
+        }
       }
     }
   }

@@ -1,247 +1,298 @@
 
-/**
- * BokBase - Persistence Layer
- * Handles all CRUD operations and simulates a cloud-sync backend.
- */
+import { 
+  collection, 
+  doc, 
+  getDoc, 
+  setDoc, 
+  updateDoc, 
+  query, 
+  orderBy, 
+  limit, 
+  onSnapshot, 
+  addDoc,
+  serverTimestamp,
+  increment,
+  getDocs,
+  deleteDoc
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { firestore, isFirebaseConfigured } from "./firebase";
+import { Member, Experience, ContentReport, AppNotification, BokActivity, VibePost, FanZoneHub, Booking } from '../types';
 
-import { Member, Experience, ContentReport, AppNotification, Transaction, BokActivity, VibePost } from '../types';
+const MOCK_EXPERIENCES: Experience[] = [
+  {
+    id: 'exp-vip-1',
+    title: 'The Platinum Suite: Brisbane Hub',
+    type: 'VIP Hospitality',
+    pricePPS: 125000,
+    priceSingle: 145000,
+    location: 'Suncorp Stadium, AU',
+    startDate: '22 Oct 2027',
+    endDate: '26 Oct 2027',
+    image: 'https://images.unsplash.com/photo-1517649763962-0c623066013b?q=80&w=1200&auto=format&fit=crop',
+    features: ['Private Skybox', 'Champagne Brunch', 'Legends Meet & Greet', 'Luxury Limo Transfer', 'Premium Gift Box'],
+    status: 'active'
+  },
+  {
+    id: 'exp-vip-2',
+    title: 'Springbok Legends Lounge',
+    type: 'VIP Hospitality',
+    pricePPS: 85000,
+    priceSingle: 95000,
+    location: 'Brisbane City, AU',
+    startDate: '23 Oct 2027',
+    endDate: '25 Oct 2027',
+    image: 'https://images.unsplash.com/photo-1541252260730-0412e8e2108e?q=80&w=1200&auto=format&fit=crop',
+    features: ['Exclusive Lounge Access', 'Gourmet Braai Buffet', 'Open Bar (Premium Brands)', 'Match Day Commemorative Item'],
+    status: 'active'
+  },
+  {
+    id: 'exp-1',
+    title: 'Finals Weekend: Brisbane Hub',
+    type: 'Two Match',
+    pricePPS: 49500,
+    priceSingle: 62000,
+    location: 'Suncorp Stadium, AU',
+    startDate: '20 Oct 2027',
+    endDate: '25 Oct 2027',
+    image: 'https://images.unsplash.com/photo-1541252260730-0412e8e2108e?q=80&w=800&auto=format&fit=crop',
+    features: ['Luxury Tent', 'Airport Transfer', 'Gold Deck Access', 'Braai Feast'],
+    status: 'active'
+  },
+  {
+    id: 'exp-2',
+    title: 'Quarter Finals Package',
+    type: 'One Match',
+    pricePPS: 28000,
+    priceSingle: 35000,
+    location: 'Sydney Cricket Ground, AU',
+    startDate: '12 Oct 2027',
+    endDate: '15 Oct 2027',
+    image: 'https://images.unsplash.com/photo-1517649763962-0c623066013b?q=80&w=800&auto=format&fit=crop',
+    features: ['Hotel Suite', 'VIP Shuttle', 'Match Ticket'],
+    status: 'active'
+  }
+];
 
-const DB_KEY = 'bok_fontein_v1_db';
+const MOCK_HUBS: FanZoneHub[] = [
+  { id: 'h1', name: 'The Braai Master Yard', density: 85, vibe: 'High Gees', deals: ['R150 Platter'], lat: -27.4698, lng: 153.0251, status: 'active', contactPerson: 'Jan Braai' },
+  { id: 'h2', name: 'Green & Gold Terrace', density: 40, vibe: 'Chill', deals: ['2-for-1 Castle'], lat: -27.4705, lng: 153.0235, status: 'active', contactPerson: 'Sarel van der Merwe' },
+];
 
-interface BokDatabase {
-  members: Member[];
-  experiences: Experience[];
-  reports: ContentReport[];
-  notifications: AppNotification[];
-  vibePosts: VibePost[];
-  currentUser: Member | null;
-  lastSync: string;
-}
-
-// XP per activity (Spirit Points)
-const XP_MAP: Record<BokActivity, number> = {
-  post: 50,
-  purchase: 1200, // Big boost for booking tours
-  topup: 300,
-  chat: 15,
-  checkin: 200
-};
-
-// Base BokBucks (Currency) per activity before multipliers
-const BUCKS_BASE_MAP: Record<BokActivity, number> = {
-  post: 10,
-  purchase: 250,
-  topup: 50,
-  chat: 5,
-  checkin: 30
-};
-
-const INITIAL_MEMBERS: Member[] = [
+const MOCK_MEMBERS: Member[] = [
   {
     id: 'm1',
-    name: 'Thabo Mokoena',
-    email: 'thabo@mzansi.com',
-    phone: '+27 82 123 4567',
+    name: 'Siya K.',
+    email: 'siya@bok.com',
+    phone: '082 123 4567',
     status: 'active',
-    joinDate: '2024-01-15',
-    balance: 15420.50,
-    geesLevel: 8,
-    geesXP: 4200,
-    rank: 42,
-    rankTier: 'Gazelle',
-    avatar: 'https://images.unsplash.com/photo-1533107862482-0e6974b06ec4?q=80&w=200&auto=format&fit=crop',
-    role: 'admin',
-    blockedUsers: []
+    joinDate: '2024-01-01',
+    balance: 50000,
+    geesLevel: 10,
+    geesXP: 8500,
+    rank: 1,
+    rankTier: 'Centurion',
+    avatar: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?q=80&w=200',
+    role: 'member',
+    blockedUsers: [],
+    checkIns: []
   },
   {
     id: 'm2',
-    name: 'Guest Fan',
-    email: 'fan@mzansi.com',
-    phone: '+27 71 000 0000',
+    name: 'Faf de K.',
+    email: 'faf@bok.com',
+    phone: '083 987 6543',
     status: 'active',
-    joinDate: '2024-10-10',
-    balance: 50.00,
-    geesLevel: 1,
-    geesXP: 0,
-    rank: 1000,
-    rankTier: 'Cub',
-    avatar: 'https://images.unsplash.com/photo-1531123897727-8f129e1688ce?q=80&w=200&auto=format&fit=crop',
+    joinDate: '2024-02-15',
+    balance: 12000,
+    geesLevel: 8,
+    geesXP: 4200,
+    rank: 45,
+    rankTier: 'Springbok',
+    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=200',
     role: 'member',
-    blockedUsers: []
+    blockedUsers: [],
+    checkIns: []
   }
 ];
 
-const INITIAL_VIBE_POSTS: VibePost[] = [
+const MOCK_POSTS: VibePost[] = [
   {
     id: 'p1',
     userId: 'm1',
-    userName: 'Thabo Mokoena',
-    userAvatar: 'https://images.unsplash.com/photo-1533107862482-0e6974b06ec4?q=80&w=200&auto=format&fit=crop',
-    content: "Just landed in Brisbane! Where's the first braai happening? 🇿🇦🇦🇺",
-    timestamp: '2 hours ago',
+    userName: 'Siya K.',
+    userAvatar: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?q=80&w=200',
+    content: 'Just arrived at the Brisbane Fan Hub! The gees is already massive. Who is joining the braai tonight? 🇿🇦🏉',
+    timestamp: '2h ago',
     likes: ['m2']
-  },
-  {
-    id: 'p2',
-    userId: 'm2',
-    userName: 'Guest Fan',
-    userAvatar: 'https://images.unsplash.com/photo-1531123897727-8f129e1688ce?q=80&w=200&auto=format&fit=crop',
-    content: "The gees at Suncorp is already electric. BOKKE! 🏉",
-    timestamp: '5 hours ago',
-    likes: ['m1']
-  }
-];
-
-const INITIAL_EXPERIENCES: Experience[] = [
-  {
-    id: '1',
-    title: 'Heritage Test: Boks vs All Blacks',
-    type: 'One Match',
-    pricePPS: 2499,
-    priceSingle: 3850,
-    location: 'Johannesburg, RSA',
-    startDate: '15 Dec 2025',
-    endDate: '16 Dec 2025',
-    image: 'https://images.unsplash.com/photo-1541252260730-0412e8e2108e?q=80&w=1200&auto=format&fit=crop',
-    features: ['Luxury Suite', 'Heritage Braai', 'Gold Match Pass']
-  },
-  {
-    id: '2',
-    title: 'Brisbane Fan Hub: Full Stage',
-    type: 'Full Group Stage',
-    pricePPS: 15999,
-    priceSingle: 22450,
-    location: 'Brisbane, AU',
-    startDate: '20 Aug 2027',
-    endDate: '28 Aug 2027',
-    image: 'https://images.unsplash.com/photo-1506701908217-0a05d9f52151?q=80&w=1200&auto=format&fit=crop',
-    features: ['Elite Fan Villa', 'SA Heritage Gala', 'Gold Pass Access', 'Fan Braai']
   }
 ];
 
 export class DatabaseService {
-  private data: BokDatabase;
+  private currentUser: Member | null = null;
+  private localExperiences: Experience[] = [];
+  private localHubs: FanZoneHub[] = [...MOCK_HUBS];
+  private localPosts: VibePost[] = [...MOCK_POSTS];
+  private localMembers: Member[] = [...MOCK_MEMBERS];
+  private localBookings: Booking[] = [];
+  private localNotifications: AppNotification[] = [];
 
   constructor() {
-    this.data = this.load();
+    this.initLocalStore();
   }
 
-  private load(): BokDatabase {
-    const saved = localStorage.getItem(DB_KEY);
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error("Database corruption detected, resetting to defaults.");
+  private initLocalStore() {
+    const savedExps = localStorage.getItem('bokfontein_experiences');
+    const savedHubs = localStorage.getItem('bokfontein_hubs');
+    const savedBookings = localStorage.getItem('bokfontein_bookings');
+    
+    if (savedExps) {
+      try { this.localExperiences = JSON.parse(savedExps); } catch (e) { this.localExperiences = [...MOCK_EXPERIENCES]; }
+    } else {
+      this.localExperiences = [...MOCK_EXPERIENCES];
+      this.persistLocalExps();
+    }
+
+    if (savedHubs) {
+      try { this.localHubs = JSON.parse(savedHubs); } catch (e) { this.localHubs = [...MOCK_HUBS]; }
+    } else {
+      this.localHubs = [...MOCK_HUBS];
+      this.persistLocalHubs();
+    }
+
+    if (savedBookings) {
+      try { this.localBookings = JSON.parse(savedBookings); } catch (e) { this.localBookings = []; }
+    }
+  }
+
+  private persistLocalExps() {
+    try { localStorage.setItem('bokfontein_experiences', JSON.stringify(this.localExperiences)); } catch (e) {}
+  }
+
+  private persistLocalHubs() {
+    try { localStorage.setItem('bokfontein_hubs', JSON.stringify(this.localHubs)); } catch (e) {}
+  }
+
+  private persistLocalBookings() {
+    try { localStorage.setItem('bokfontein_bookings', JSON.stringify(this.localBookings)); } catch (e) {}
+  }
+
+  async getExperiences(): Promise<Experience[]> {
+    if (!isFirebaseConfigured) return this.localExperiences;
+    try {
+      const querySnapshot = await getDocs(collection(firestore, "experiences"));
+      const data = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as Experience);
+      return data.length > 0 ? data : this.localExperiences;
+    } catch (e) {
+      return this.localExperiences;
+    }
+  }
+
+  async saveExperience(experience: Experience): Promise<void> {
+    const existingIndex = this.localExperiences.findIndex(e => e.id === experience.id);
+    if (existingIndex > -1) { this.localExperiences[existingIndex] = experience; } 
+    else { this.localExperiences.push(experience); }
+    this.persistLocalExps();
+
+    if (!isFirebaseConfigured) return;
+    try { await setDoc(doc(firestore, "experiences", experience.id), experience); } catch (e) {}
+  }
+
+  async deleteExperience(id: string): Promise<void> {
+    this.localExperiences = this.localExperiences.filter(e => e.id !== id);
+    this.persistLocalExps();
+    if (isFirebaseConfigured) {
+      try { await deleteDoc(doc(firestore, "experiences", id)); } catch (e) {}
+    }
+  }
+
+  async getBookings(userId: string): Promise<Booking[]> {
+    return this.localBookings.filter(b => b.userId === userId);
+  }
+
+  async addBooking(booking: Booking): Promise<void> {
+    this.localBookings.push(booking);
+    this.persistLocalBookings();
+  }
+
+  async getHubs(): Promise<FanZoneHub[]> {
+    if (!isFirebaseConfigured) return this.localHubs;
+    try {
+      const querySnapshot = await getDocs(collection(firestore, "hubs"));
+      const data = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as FanZoneHub);
+      return data.length > 0 ? data : this.localHubs;
+    } catch (e) {
+      return this.localHubs;
+    }
+  }
+
+  async saveHub(hub: FanZoneHub): Promise<void> {
+    const existingIndex = this.localHubs.findIndex(h => h.id === hub.id);
+    if (existingIndex > -1) { this.localHubs[existingIndex] = hub; } 
+    else { this.localHubs.push(hub); }
+    this.persistLocalHubs();
+
+    if (!isFirebaseConfigured) return;
+    try { await setDoc(doc(firestore, "hubs", hub.id), hub); } catch (e) {}
+  }
+
+  async deleteHub(id: string): Promise<void> {
+    this.localHubs = this.localHubs.filter(h => h.id !== id);
+    this.persistLocalHubs();
+    if (isFirebaseConfigured) { await deleteDoc(doc(firestore, "hubs", id)); }
+  }
+
+  async updateMemberBalance(memberId: string, amount: number) {
+    if (this.currentUser && this.currentUser.id === memberId) {
+      this.currentUser.balance += amount;
+    }
+    if (isFirebaseConfigured && !memberId.startsWith('guest')) {
+      await updateDoc(doc(firestore, "members", memberId), { balance: increment(amount) });
+    }
+  }
+
+  setCurrentUser(user: Member | null) { this.currentUser = user; }
+  getCurrentUser() { return this.currentUser; }
+  
+  getVibePosts(): VibePost[] { return this.localPosts; }
+  addVibePost(post: VibePost) { this.localPosts = [post, ...this.localPosts]; }
+  toggleLikePost(postId: string, userId: string) {
+    const post = this.localPosts.find(p => p.id === postId);
+    if (post) {
+      if (post.likes.includes(userId)) { post.likes = post.likes.filter(id => id !== userId); } 
+      else { post.likes.push(userId); }
+    }
+  }
+
+  getMembers(): Member[] { return this.localMembers; }
+  
+  processActivity(userId: string, type: string) {
+    if (this.currentUser && this.currentUser.id === userId) {
+      this.currentUser.geesXP += 50;
+      if (this.currentUser.geesXP >= this.currentUser.geesLevel * 500) {
+        this.currentUser.geesLevel += 1;
       }
     }
-    return {
-      members: INITIAL_MEMBERS,
-      experiences: INITIAL_EXPERIENCES,
-      reports: [],
-      notifications: [],
-      vibePosts: INITIAL_VIBE_POSTS,
-      currentUser: null,
-      lastSync: new Date().toISOString()
-    };
   }
 
-  save() {
-    this.data.lastSync = new Date().toISOString();
-    localStorage.setItem(DB_KEY, JSON.stringify(this.data));
+  async getMemberById(id: string): Promise<Member | null> {
+    if (!isFirebaseConfigured) return this.localMembers.find(m => m.id === id) || null;
+    try {
+      const snap = await getDoc(doc(firestore, "members", id));
+      return snap.exists() ? (snap.data() as Member) : null;
+    } catch (e) { return null; }
   }
 
-  getMembers() { return this.data.members; }
-  getExperiences() { return this.data.experiences; }
-  getReports() { return this.data.reports; }
-  getNotifications() { return this.data.notifications; }
-  getVibePosts() { return this.data.vibePosts; }
-  getCurrentUser() { return this.data.currentUser; }
-  getLastSync() { return this.data.lastSync; }
-
-  setMembers(members: Member[]) { this.data.members = members; this.save(); }
-  setExperiences(exps: Experience[]) { this.data.experiences = exps; this.save(); }
-  setReports(reports: ContentReport[]) { this.data.reports = reports; this.save(); }
-  setNotifications(notifs: AppNotification[]) { this.data.notifications = notifs; this.save(); }
-  setVibePosts(posts: VibePost[]) { this.data.vibePosts = posts; this.save(); }
-  setCurrentUser(user: Member | null) { this.data.currentUser = user; this.save(); }
-
-  updateMemberBalance(memberId: string, amount: number) {
-    this.data.members = this.data.members.map(m => {
-      if (m.id === memberId) {
-        const newBalance = m.balance + amount;
-        if (this.data.currentUser?.id === memberId) {
-          this.data.currentUser.balance = newBalance;
-        }
-        return { ...m, balance: newBalance };
-      }
-      return m;
-    });
-    this.save();
+  async createMember(m: Member) {
+    this.localMembers.push(m);
+    if (isFirebaseConfigured) { await setDoc(doc(firestore, "members", m.id), m); }
   }
 
-  toggleLikePost(postId: string, userId: string) {
-    this.data.vibePosts = this.data.vibePosts.map(p => {
-      if (p.id === postId) {
-        const liked = p.likes.includes(userId);
-        return {
-          ...p,
-          likes: liked ? p.likes.filter(id => id !== userId) : [...p.likes, userId]
-        };
-      }
-      return p;
-    });
-    this.save();
+  addNotification(notification: AppNotification) {
+    this.localNotifications = [notification, ...this.localNotifications];
   }
 
-  addVibePost(post: VibePost) {
-    this.data.vibePosts = [post, ...this.data.vibePosts];
-    this.save();
-  }
-
-  processActivity(memberId: string, activity: BokActivity) {
-    const xp = XP_MAP[activity];
-    const baseBucks = BUCKS_BASE_MAP[activity];
-
-    this.data.members = this.data.members.map(m => {
-      if (m.id === memberId) {
-        // Calculate Multiplier based on current level
-        let multiplier = 1.0;
-        if (m.geesLevel > 15) multiplier = 3.0;
-        else if (m.geesLevel > 10) multiplier = 2.0;
-        else if (m.geesLevel > 5) multiplier = 1.5;
-
-        const earnedBucks = baseBucks * multiplier;
-        const newXP = m.geesXP + xp;
-        const newLevel = Math.floor(newXP / 500) + 1;
-        const newBalance = m.balance + earnedBucks;
-        
-        let newTier: Member['rankTier'] = 'Cub';
-        if (newLevel > 15) newTier = 'Centurion';
-        else if (newLevel > 10) newTier = 'Springbok';
-        else if (newLevel > 5) newTier = 'Gazelle';
-
-        const updated = { 
-          ...m, 
-          geesXP: newXP, 
-          geesLevel: newLevel, 
-          rankTier: newTier,
-          balance: newBalance 
-        };
-
-        if (this.data.currentUser?.id === memberId) {
-          this.data.currentUser = updated;
-        }
-        return updated;
-      }
-      return m;
-    });
-    this.save();
-  }
-
-  addNotification(notif: AppNotification) {
-    this.data.notifications = [notif, ...this.data.notifications];
-    this.save();
+  getNotifications(): AppNotification[] {
+    return this.localNotifications;
   }
 }
 
