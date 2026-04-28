@@ -12,6 +12,7 @@ import { bokSync } from '../services/syncService';
 import { db } from '../services/db';
 import { native } from '../services/nativeService';
 import { MatchState, Member, VibePost } from '../types';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface Journey {
   id: string;
@@ -202,12 +203,13 @@ const Home: React.FC<HomeProps> = ({ onAddNotification, userName = "Thabo", onNa
   };
 
   const getTransportIcon = (mode: string) => {
+    const props = { size: 16, strokeWidth: 1.5 };
     switch (mode) {
-      case 'Car': return <Car size={16} />;
-      case 'Bus': return <Bus size={16} />;
-      case 'Train': return <Train size={16} />;
-      case 'Walk': return <Footprints size={16} />;
-      default: return <Navigation size={16} />;
+      case 'Car': return <Car {...props} />;
+      case 'Bus': return <Bus {...props} />;
+      case 'Train': return <Train {...props} />;
+      case 'Walk': return <Footprints {...props} />;
+      default: return <Navigation {...props} />;
     }
   };
 
@@ -231,18 +233,27 @@ const Home: React.FC<HomeProps> = ({ onAddNotification, userName = "Thabo", onNa
 
         {/* Weather Widget */}
         {weather && (
-          <div className="bg-white/40 backdrop-blur-md rounded-2xl p-3 border border-white/50 shadow-sm text-right flex flex-col items-end">
+          <motion.div 
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="bg-white/40 backdrop-blur-md rounded-2xl p-3 border border-white/50 shadow-sm text-right flex flex-col items-end"
+          >
              <div className="flex items-center space-x-1.5 text-[#004d3d]">
-                <ThermometerSun size={14} className="text-[#fdb913]" />
+                <ThermometerSun size={14} className="text-[#fdb913] drop-shadow-[0_0_5px_rgba(253,185,19,0.4)]" strokeWidth={2} />
                 <span className="text-xs font-black">{weather.temp}</span>
              </div>
              <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mt-0.5">{weather.condition}</p>
-          </div>
+          </motion.div>
         )}
       </div>
 
       {/* Primary Dashboard Card (Unified) */}
-      <section className="bg-white rounded-[40px] p-1 shadow-luxury border border-slate-50 overflow-hidden shrink-0">
+      <motion.section 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
+        className="bg-white rounded-[40px] p-1 shadow-luxury border border-slate-50 overflow-hidden shrink-0"
+      >
         <div className="p-8">
           <div className="flex justify-between items-start mb-6">
             <div>
@@ -250,49 +261,57 @@ const Home: React.FC<HomeProps> = ({ onAddNotification, userName = "Thabo", onNa
               <h3 className="text-2xl font-black font-heading text-[#004d3d] leading-none">{isBrisbane ? 'Legends Deck Hub' : 'Mzansi Fan Portal'}</h3>
             </div>
             <div className="p-3 bg-amber-50 text-[#fdb913] rounded-2xl">
-              <Clock size={24} />
+              <Clock size={24} strokeWidth={1.5} className="drop-shadow-[0_0_8px_rgba(253,185,19,0.3)]" />
             </div>
           </div>
           <div className="flex items-center justify-between mb-8">
             <div className="flex items-center space-x-3">
               <div className="flex -space-x-3">
-                <img src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=100" className="w-8 h-8 rounded-full border-2 border-white" alt="" />
-                <img src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=100" className="w-8 h-8 rounded-full border-2 border-white" alt="" />
-                <div className="w-8 h-8 rounded-full border-2 border-white bg-slate-100 flex items-center justify-center text-[8px] font-black text-slate-400">+120</div>
+                <img src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=100" className="w-8 h-8 rounded-full border-2 border-white shadow-sm" alt="" />
+                <img src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=100" className="w-8 h-8 rounded-full border-2 border-white shadow-sm" alt="" />
+                <div className="w-8 h-8 rounded-full border-2 border-white bg-slate-100 flex items-center justify-center text-[8px] font-black text-slate-400 shadow-sm">+120</div>
               </div>
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">{isBrisbane ? 'The Gees is high at Suncorp!' : 'Saffas are gathering nearby!'}</span>
             </div>
             {isAdmin && (
-              <button 
+              <motion.button 
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
                 onClick={() => onNavigateToTab?.('admin')}
                 className="bg-[#004d3d] text-[#fdb913] px-3 py-1.5 rounded-xl text-[8px] font-black uppercase tracking-widest shadow-sm flex items-center space-x-1.5"
               >
-                <Shield size={10} />
+                <Shield size={10} strokeWidth={2} />
                 <span>Command Center</span>
-              </button>
+              </motion.button>
             )}
           </div>
-          <button 
+          <motion.button 
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
             onClick={() => onNavigateToTab?.('experiences')}
-            className="w-full bg-[#004d3d] text-[#fdb913] py-5 rounded-[28px] font-black uppercase text-xs tracking-[0.2em] shadow-lg flex items-center justify-center space-x-3 active:scale-95 transition-all"
+            className="w-full bg-[#004d3d] text-[#fdb913] py-5 rounded-[28px] font-black uppercase text-xs tracking-[0.2em] shadow-lg flex items-center justify-center space-x-3 transition-all relative overflow-hidden group"
           >
-            <Ticket size={18} />
-            <span>{isBrisbane ? 'Show my Virtual Pass' : 'Explore Elite Events'}</span>
-          </button>
+            <div className="absolute inset-0 bg-[#fdb913]/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            <Ticket size={18} strokeWidth={1.5} className="relative z-10" />
+            <span className="relative z-10">{isBrisbane ? 'Show my Virtual Pass' : 'Explore Elite Events'}</span>
+          </motion.button>
         </div>
         <div className="bg-slate-50 p-6 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <ShoppingBag size={18} className="text-[#004d3d]" />
-            <p className="text-[10px] font-black text-[#004d3d] uppercase tracking-widest">Lekker Shop: {isBrisbane ? '20% Off Merch' : 'New Fan Packs Available'}</p>
+          <div className="flex items-center space-x-3 text-[#004d3d]">
+            <ShoppingBag size={18} strokeWidth={1.5} />
+            <p className="text-[10px] font-black uppercase tracking-widest text-[#004d3d]">Lekker Shop: {isBrisbane ? '20% Off Merch' : 'New Fan Packs Available'}</p>
           </div>
-          <ChevronRight size={14} className="text-slate-300" />
+          <ChevronRight size={14} className="text-slate-300" strokeWidth={3} />
         </div>
-      </section>
+      </motion.section>
 
       {/* RE-OPTIMIZED: Live Social Pulse Section - FIXED FOR ALL SCREENS */}
-      <section 
+      <motion.section 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2 }}
         onClick={() => onNavigateToTab?.('community')}
-        className="bg-white rounded-[40px] px-4 py-8 sm:px-8 shadow-soft border border-slate-100 relative overflow-hidden group cursor-pointer active:scale-95 transition-all w-full"
+        className="bg-white rounded-[40px] px-4 py-8 sm:px-8 shadow-soft border border-slate-100 relative overflow-hidden group cursor-pointer active:scale-[0.98] transition-all w-full"
       >
         <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-[#fdb913]/10 to-transparent rounded-full -mr-12 -mt-12 blur-2xl"></div>
         
@@ -314,21 +333,27 @@ const Home: React.FC<HomeProps> = ({ onAddNotification, userName = "Thabo", onNa
           {/* Social Snippets: Centered and Wrapping Properly */}
           <div className="w-full space-y-3 mb-6">
             {livePosts.length > 0 ? (
-              livePosts.map(post => (
-                <div key={post.id} className="flex justify-center w-full animate-slideUp">
-                  <div className="flex items-center space-x-3 w-full max-w-xs sm:max-w-sm">
-                    <img src={post.userAvatar} className="w-8 h-8 rounded-full border-2 border-slate-50 shadow-sm shrink-0" alt="" />
-                    <div className="bg-[#fdb913]/5 border border-[#fdb913]/10 px-4 py-2.5 rounded-[20px] flex-1 min-w-0">
+              livePosts.map((post, idx) => (
+                <motion.div 
+                  key={post.id} 
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.3 + (idx * 0.1) }}
+                  className="flex justify-center w-full"
+                >
+                  <div className="flex items-center space-x-3 w-full max-w-xs sm:max-w-sm group/post">
+                    <img src={post.userAvatar} className="w-8 h-8 rounded-full border-2 border-slate-100 shadow-sm shrink-0 transition-transform group-hover/post:scale-110" alt="" />
+                    <div className="bg-[#fdb913]/5 border border-[#fdb913]/10 px-4 py-2.5 rounded-[20px] flex-1 min-w-0 shadow-sm group-hover/post:bg-[#fdb913]/10 transition-colors">
                       <p className="text-[10px] sm:text-[11px] text-[#004d3d] font-bold italic leading-snug text-center break-words">
                         "{post.content}"
                       </p>
                     </div>
                   </div>
-                </div>
+                </motion.div>
               ))
             ) : (
               <div className="py-4 flex flex-col items-center justify-center space-y-2 opacity-30 w-full">
-                <MessageSquare size={24} className="text-[#004d3d]" />
+                <MessageSquare size={24} className="text-[#004d3d]" strokeWidth={1.5} />
                 <p className="text-[9px] font-black uppercase tracking-widest text-center">Awaiting gees...</p>
               </div>
             )}
@@ -337,41 +362,54 @@ const Home: React.FC<HomeProps> = ({ onAddNotification, userName = "Thabo", onNa
           {/* CTA: Centered Button */}
           <div className="bg-[#004d3d]/5 px-5 py-2.5 rounded-full flex items-center justify-center space-x-2 hover:bg-[#004d3d]/10 transition-colors border border-[#004d3d]/5 w-fit">
              <span className="text-[8px] sm:text-[9px] font-black text-[#004d3d] uppercase tracking-widest text-center">Join the Fan Vibe</span>
-             <ChevronRight size={12} className="text-[#fdb913]" />
+             <ChevronRight size={12} className="text-[#fdb913]" strokeWidth={2.5} />
           </div>
         </div>
-      </section>
+      </motion.section>
 
       {/* Match Day Journeys Section */}
-      <section className="bg-white rounded-[40px] p-8 shadow-soft border border-slate-100 space-y-6">
+      <motion.section 
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ delay: 0.4 }}
+        className="bg-white rounded-[40px] p-8 shadow-soft border border-slate-100 space-y-6"
+      >
         <div className="flex justify-between items-center">
           <div>
             <h3 className="text-xl font-black font-heading text-[#004d3d]">Match Day Journeys</h3>
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Get to the gees on time, bru!</p>
           </div>
-          <button 
+          <motion.button 
+            whileHover={{ scale: 1.1, rotate: 5 }}
+            whileTap={{ scale: 0.9, rotate: -5 }}
             onClick={() => { setShowJourneyModal(true); native.hapticImpact(); }}
-            className="w-10 h-10 bg-[#fdb913] text-[#004d3d] rounded-2xl flex items-center justify-center shadow-lg active:scale-90 transition-all"
+            className="w-10 h-10 bg-[#fdb913] text-[#004d3d] rounded-2xl flex items-center justify-center shadow-lg transition-all"
           >
-            <Plus size={20} strokeWidth={3} />
-          </button>
+            <Plus size={20} strokeWidth={2.5} />
+          </motion.button>
         </div>
 
         {journeys.length === 0 ? (
           <div className="py-8 text-center bg-slate-50 rounded-[32px] border border-dashed border-slate-200">
-            <Navigation className="mx-auto text-slate-300 mb-3" size={32} />
+            <Navigation className="mx-auto text-slate-300 mb-3" size={32} strokeWidth={1} />
             <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">No journeys planned yet, boet.</p>
-            <button 
+            <motion.button 
+              whileHover={{ y: -2 }}
               onClick={() => setShowJourneyModal(true)}
-              className="mt-4 text-[10px] font-black text-[#004d3d] uppercase tracking-[0.2em] underline"
+              className="mt-4 text-[10px] font-black text-[#004d3d] uppercase tracking-[0.2em] underline decoration-[#fdb913] underline-offset-4"
             >
               Plan your route
-            </button>
+            </motion.button>
           </div>
         ) : (
           <div className="space-y-3">
             {journeys.map(j => (
-              <div key={j.id} className="bg-slate-50 p-5 rounded-[32px] border border-slate-100 flex items-center justify-between animate-scaleIn">
+              <motion.div 
+                key={j.id} 
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="bg-slate-50 p-5 rounded-[32px] border border-slate-100 flex items-center justify-between"
+              >
                 <div className="flex items-center space-x-4">
                   <div className="w-12 h-12 bg-white rounded-2xl shadow-sm flex items-center justify-center text-[#004d3d]">
                     {getTransportIcon(j.transport)}
@@ -382,53 +420,70 @@ const Home: React.FC<HomeProps> = ({ onAddNotification, userName = "Thabo", onNa
                   </div>
                 </div>
                 <div className="text-right">
-                  <span className="text-[9px] font-black text-[#fdb913] bg-[#004d3d] px-2 py-1 rounded-lg uppercase tracking-widest">Active</span>
+                  <span className="text-[9px] font-black text-[#fdb913] bg-[#004d3d] px-2 py-1 rounded-lg uppercase tracking-widest shadow-sm">Active</span>
                 </div>
-              </div>
+              </motion.div>
             ))}
           </div>
         )}
-      </section>
+      </motion.section>
 
       {/* Dynamic Pulse Card */}
-      <section 
+      <motion.section 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.5 }}
         onClick={() => onNavigateToTab?.('green_mile')}
-        className="relative h-48 rounded-[40px] overflow-hidden shadow-soft border border-slate-100 group cursor-pointer shrink-0"
+        className="relative h-48 rounded-[40px] overflow-hidden shadow-soft border border-slate-100 group cursor-pointer shrink-0 active:scale-[0.98] transition-all"
       >
         <img 
           src={isBrisbane ? "https://images.unsplash.com/photo-1533107862482-0e6974b06ec4?q=80&w=800" : "https://images.unsplash.com/photo-1524661135-423995f22d0b?q=80&w=800"} 
-          className="absolute inset-0 w-full h-full object-cover grayscale opacity-20 group-hover:scale-110 transition-transform duration-700" 
+          className="absolute inset-0 w-full h-full object-cover grayscale opacity-20 group-hover:scale-110 transition-transform duration-1000" 
           alt="" 
         />
         <div className="absolute inset-0 bg-gradient-to-br from-white via-white/40 to-transparent"></div>
         <div className="relative z-10 p-8 h-full flex flex-col justify-between">
           <div>
             <div className="flex items-center space-x-2 mb-2">
-              <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+              <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.5)]"></div>
               <p className="text-[9px] font-black text-red-500 uppercase tracking-widest">Live Pulse</p>
             </div>
-            <h3 className="text-2xl font-black font-heading text-[#004d3d]">{isBrisbane ? 'The Green Mile' : 'Mzansi Fan Pulse'}</h3>
+            <h3 className="text-2xl font-black font-heading text-[#004d3d] leading-none">{isBrisbane ? 'The Green Mile' : 'Mzansi Fan Pulse'}</h3>
           </div>
           <div className="flex items-center space-x-4">
-             <div className="flex items-center space-x-2">
-               <Users size={16} className="text-[#004d3d]" />
-               <span className="text-[10px] font-black text-[#004d3d] uppercase tracking-widest">{isBrisbane ? 'High Gees Hubs Nearby' : 'Global Fan Hubs Live'}</span>
+             <div className="flex items-center space-x-2 text-[#004d3d]">
+               <Users size={16} strokeWidth={1.5} />
+               <span className="text-[10px] font-black uppercase tracking-widest">{isBrisbane ? 'High Gees Hubs Nearby' : 'Global Fan Hubs Live'}</span>
              </div>
-             <ChevronRight size={16} className="text-slate-300" />
+             <ChevronRight size={16} className="text-slate-300" strokeWidth={2.5} />
           </div>
         </div>
-      </section>
+      </motion.section>
 
       {/* Bok Gees Vision & Concierge Buttons */}
       <div className="grid grid-cols-2 gap-4 relative z-10 shrink-0">
-        <button onClick={startBokLens} className="flex flex-col items-center justify-center p-8 bg-[#004d3d] text-[#fdb913] rounded-[40px] shadow-xl active:scale-95 transition-all group border border-white/10">
-          <div className="w-16 h-16 bg-white/10 rounded-3xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform"><Camera size={32} /></div>
-          <span className="font-black text-xs uppercase tracking-widest text-center">Scan my Gees</span>
-        </button>
-        <button onClick={() => { native.hapticImpact(); onOpenChat?.(); }} className="flex flex-col items-center justify-center p-8 bg-white text-[#004d3d] rounded-[40px] shadow-lg border border-slate-100 active:scale-95 transition-all group">
-          <div className="w-16 h-16 bg-[#004d3d]/5 rounded-3xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform"><MessageSquare size={32} /></div>
-          <span className="font-black text-xs uppercase tracking-widest text-center">Ask BOK-CONCIERGE</span>
-        </button>
+        <motion.button 
+          whileHover={{ y: -5, boxShadow: '0 20px 40px -10px rgba(0,77,61,0.2)' }}
+          whileTap={{ scale: 0.95 }}
+          onClick={startBokLens} 
+          className="flex flex-col items-center justify-center p-8 bg-[#004d3d] text-[#fdb913] rounded-[40px] shadow-xl transition-all group border border-white/10"
+        >
+          <div className="w-16 h-16 bg-white/10 rounded-3xl flex items-center justify-center mb-4 ring-1 ring-white/20 shadow-inner group-hover:bg-white/20 transition-all">
+            <Camera size={32} strokeWidth={1.5} className="group-hover:rotate-6 transition-transform" />
+          </div>
+          <span className="font-black text-[10px] uppercase tracking-widest text-center leading-tight">Scan my<br/>Gees</span>
+        </motion.button>
+        <motion.button 
+          whileHover={{ y: -5, boxShadow: '0 20px 40px -10px rgba(0,0,0,0.1)' }}
+          whileTap={{ scale: 0.95 }}
+          onClick={() => { native.hapticImpact(); onOpenChat?.(); }} 
+          className="flex flex-col items-center justify-center p-8 bg-white text-[#004d3d] rounded-[40px] shadow-lg border border-slate-100 transition-all group"
+        >
+          <div className="w-16 h-16 bg-[#004d3d]/5 rounded-3xl flex items-center justify-center mb-4 ring-1 ring-[#004d3d]/10 shadow-sm group-hover:bg-[#004d3d]/10 transition-all">
+            <MessageSquare size={32} strokeWidth={1.5} className="group-hover:-rotate-6 transition-transform" />
+          </div>
+          <span className="font-black text-[10px] uppercase tracking-widest text-center leading-tight">Ask<br/>BOK-CONCIERGE</span>
+        </motion.button>
       </div>
 
       {/* MODALS */}
@@ -578,16 +633,21 @@ const Home: React.FC<HomeProps> = ({ onAddNotification, userName = "Thabo", onNa
   );
 };
 
-const FilterIcon: React.FC<{ active: boolean, onClick: () => void, icon: React.ReactNode, label: string }> = ({ active, onClick, icon, label }) => (
-  <button 
+const FilterIcon: React.FC<{ active: boolean, onClick: () => void, icon: React.ReactElement, label: string }> = ({ active, onClick, icon, label }) => (
+  <motion.button 
+    whileTap={{ scale: 0.9 }}
     onClick={onClick}
-    className={`flex flex-col items-center shrink-0 space-y-1 transition-all ${active ? 'scale-110' : 'opacity-40'}`}
+    className={`flex flex-col items-center shrink-0 space-y-2 transition-all ${active ? 'scale-105' : 'opacity-40 hover:opacity-100'}`}
   >
-    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center border-2 ${active ? 'bg-[#fdb913] border-white text-[#004d3d]' : 'bg-white/10 border-white/10 text-white'}`}>
-      {icon}
+    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center border-2 transition-all duration-300 ${active ? 'bg-[#fdb913] border-white text-[#004d3d] shadow-[0_0_15px_rgba(253,185,19,0.4)]' : 'bg-white/10 border-white/10 text-white'}`}>
+      {React.cloneElement(icon, { 
+        size: 24, 
+        strokeWidth: active ? 2 : 1.5,
+        className: active ? 'drop-shadow-[0_0_5px_rgba(0,77,61,0.3)]' : '' 
+      })}
     </div>
-    <span className="text-[8px] font-black uppercase text-white tracking-widest">{label}</span>
-  </button>
+    <span className={`text-[8px] font-black uppercase tracking-widest transition-colors ${active ? 'text-[#fdb913]' : 'text-white'}`}>{label}</span>
+  </motion.button>
 );
 
 export default Home;

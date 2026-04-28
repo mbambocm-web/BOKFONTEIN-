@@ -73,9 +73,10 @@ const MOCK_EXPERIENCES: Experience[] = [
   }
 ];
 
+// Fix: Added missing 'activity' and 'type' properties to MOCK_HUBS to satisfy FanZoneHub interface
 const MOCK_HUBS: FanZoneHub[] = [
-  { id: 'h1', name: 'The Braai Master Yard', density: 85, vibe: 'High Gees', deals: ['R150 Platter'], lat: -27.4698, lng: 153.0251, status: 'active', contactPerson: 'Jan Braai' },
-  { id: 'h2', name: 'Green & Gold Terrace', density: 40, vibe: 'Chill', deals: ['2-for-1 Castle'], lat: -27.4705, lng: 153.0235, status: 'active', contactPerson: 'Sarel van der Merwe' },
+  { id: 'h1', name: 'The Braai Master Yard', activity: 'Braai & Rugby Viewing', type: 'venue', density: 85, vibe: 'High Gees', deals: ['R150 Platter'], lat: -27.4698, lng: 153.0251, status: 'active', contactPerson: 'Jan Braai' },
+  { id: 'h2', name: 'Green & Gold Terrace', activity: 'Social Gathering & Drinks', type: 'venue', density: 40, vibe: 'Chill', deals: ['2-for-1 Castle'], lat: -27.4705, lng: 153.0235, status: 'active', contactPerson: 'Sarel van der Merwe' },
 ];
 
 const MOCK_MEMBERS: Member[] = [

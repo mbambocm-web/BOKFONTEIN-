@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
-import { Home, Compass, Users, User, Wallet, Bell, X, Check, MapPin, ShieldAlert, Zap, RefreshCcw, WifiOff, Map as MapIcon, Shield } from 'lucide-react';
+import { Home, Compass, User, Wallet, Bell, X, Check, MapPin, ShieldAlert, Zap, RefreshCcw, WifiOff, Map as MapIcon, Shield } from 'lucide-react';
 import { AppTab, AppNotification } from '../types';
 import { native } from '../services/nativeService';
-import { db } from '../services/db';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -37,15 +37,11 @@ const Layout: React.FC<LayoutProps> = ({
       navigator.geolocation.getCurrentPosition(
         async (position) => {
           const { latitude, longitude } = position.coords;
-          // Simple heuristic for demo: If near Brisbane, say Brisbane. 
-          // Otherwise, show "Nearby Area". In a real app, use reverse geocoding.
           const isNearBrisbane = Math.abs(latitude + 27.46) < 0.5 && Math.abs(longitude - 153.02) < 0.5;
           if (isNearBrisbane) {
             setUserLocation("Brisbane, AU");
           } else {
-            // Simulate reverse geocoding based on coordinates
             setUserLocation(`${latitude.toFixed(2)}, ${longitude.toFixed(2)}`);
-            // Attempt to get a friendly name from Gemini later if needed
           }
         },
         (error) => {
@@ -85,10 +81,15 @@ const Layout: React.FC<LayoutProps> = ({
     <div className="flex flex-col h-screen max-w-md mx-auto bg-[#f8fafc] border-x border-slate-100 overflow-hidden relative" role="application" aria-label="BOKFONTEIN App">
       
       {!isOnline && !hideUI && (
-        <div className="fixed top-0 left-0 right-0 w-full bg-red-600 text-white py-2 px-4 z-[110] flex items-center justify-center space-x-2 animate-fadeIn shadow-lg h-10" role="alert">
-          <WifiOff size={12} />
+        <motion.div 
+          initial={{ y: -50 }}
+          animate={{ y: 0 }}
+          className="fixed top-0 left-0 right-0 w-full bg-red-600 text-white py-2 px-4 z-[110] flex items-center justify-center space-x-2 shadow-lg h-10" 
+          role="alert"
+        >
+          <WifiOff size={14} strokeWidth={1.5} />
           <span className="text-[10px] font-black uppercase tracking-widest">Signal Patchy - Working Offline</span>
-        </div>
+        </motion.div>
       )}
 
       {!hideUI && (
@@ -97,7 +98,7 @@ const Layout: React.FC<LayoutProps> = ({
             <div className="animate-fadeIn overflow-hidden">
               <div className="flex items-center space-x-2">
                 <p className="text-[8px] font-black text-[#fdb913] uppercase tracking-widest flex items-center">
-                  <MapPin size={10} className="mr-1" strokeWidth={3} />
+                  <MapPin size={10} className="mr-1" strokeWidth={2} />
                   {userLocation}
                 </p>
                 {isAdmin && (
@@ -110,15 +111,16 @@ const Layout: React.FC<LayoutProps> = ({
             </div>
           </div>
 
-          <button 
+          <motion.button 
+            whileTap={{ scale: 0.95 }}
             onClick={() => { native.hapticImpact(); setShowNotifications(true); }}
-            className="w-10 h-10 flex items-center justify-center rounded-2xl bg-[#004d3d]/5 text-[#004d3d] active:scale-90 transition-all relative border border-[#004d3d]/10 shrink-0"
+            className="w-10 h-10 flex items-center justify-center rounded-2xl bg-[#004d3d]/5 text-[#004d3d] transition-all relative border border-[#004d3d]/10 shrink-0 hover:bg-[#004d3d]/10 active:bg-[#004d3d]/20"
           >
-            <Bell size={18} strokeWidth={2.5} />
+            <Bell size={18} strokeWidth={1.75} />
             {unreadCount > 0 && (
-              <span className="absolute top-0 right-0 w-3 h-3 bg-[#fdb913] rounded-full border-2 border-white shadow-sm"></span>
+              <span className="absolute top-0 right-0 w-3 h-3 bg-[#fdb913] rounded-full border-2 border-white shadow-sm ring-2 ring-[#fdb913]/20"></span>
             )}
-          </button>
+          </motion.button>
         </header>
       )}
 
@@ -127,15 +129,15 @@ const Layout: React.FC<LayoutProps> = ({
       </main>
 
       {!hideUI && (
-        <nav className="fixed bottom-[calc(var(--safe-area-bottom)+1.5rem)] left-4 right-4 glass-premium border border-white/40 flex justify-around items-center py-3 px-3 rounded-[32px] shadow-luxury z-40">
-          <NavButton icon={<Home size={20} />} active={activeTab === AppTab.HOME} onClick={() => handleTabClick(AppTab.HOME)} label="Home" />
-          <NavButton icon={<MapIcon size={20} />} active={activeTab === AppTab.GREEN_MILE} onClick={() => handleTabClick(AppTab.GREEN_MILE)} label="Pulse" />
-          <NavButton icon={<Compass size={20} />} active={activeTab === AppTab.EXPERIENCES} onClick={() => handleTabClick(AppTab.EXPERIENCES)} label="Events" />
-          <NavButton icon={<Wallet size={20} />} active={activeTab === AppTab.WALLET} onClick={() => handleTabClick(AppTab.WALLET)} label="Wallet" />
+        <nav className="fixed bottom-[calc(var(--safe-area-bottom)+1.5rem)] left-4 right-4 glass-premium border border-white/40 flex justify-around items-center py-2 px-2 rounded-[32px] shadow-luxury z-40">
+          <NavButton icon={<Home />} active={activeTab === AppTab.HOME} onClick={() => handleTabClick(AppTab.HOME)} label="Home" />
+          <NavButton icon={<MapIcon />} active={activeTab === AppTab.GREEN_MILE} onClick={() => handleTabClick(AppTab.GREEN_MILE)} label="Pulse" />
+          <NavButton icon={<Compass />} active={activeTab === AppTab.EXPERIENCES} onClick={() => handleTabClick(AppTab.EXPERIENCES)} label="Events" />
+          <NavButton icon={<Wallet />} active={activeTab === AppTab.WALLET} onClick={() => handleTabClick(AppTab.WALLET)} label="Wallet" />
           {isAdmin ? (
-             <NavButton icon={<Shield size={20} />} active={activeTab === AppTab.ADMIN} onClick={() => handleTabClick(AppTab.ADMIN)} label="Admin" />
+             <NavButton icon={<Shield />} active={activeTab === AppTab.ADMIN} onClick={() => handleTabClick(AppTab.ADMIN)} label="Admin" />
           ) : (
-             <NavButton icon={<User size={20} />} active={activeTab === AppTab.PROFILE} onClick={() => handleTabClick(AppTab.PROFILE)} label="Profile" />
+             <NavButton icon={<User />} active={activeTab === AppTab.PROFILE} onClick={() => handleTabClick(AppTab.PROFILE)} label="Profile" />
           )}
         </nav>
       )}
@@ -143,15 +145,33 @@ const Layout: React.FC<LayoutProps> = ({
   );
 };
 
-const NavButton: React.FC<{ icon: React.ReactNode, active: boolean, onClick: () => void, label: string }> = ({ icon, label, active, onClick }) => (
+const NavButton: React.FC<{ icon: React.ReactElement, active: boolean, onClick: () => void, label: string }> = ({ icon, label, active, onClick }) => (
   <button 
     onClick={onClick}
-    className={`flex flex-col items-center justify-center w-12 h-12 rounded-[20px] transition-all duration-500 relative ${active ? 'bg-[#004d3d] text-white shadow-xl scale-110' : 'text-slate-400 hover:text-[#004d3d] active:scale-90'}`}
+    className={`flex flex-col items-center justify-center w-12 h-12 rounded-[24px] transition-all duration-300 relative group overflow-hidden ${active ? 'text-white' : 'text-slate-400 hover:text-[#004d3d]'}`}
     aria-label={label}
   >
-    {icon}
     {active && (
-      <span className="absolute -bottom-1 w-1 h-1 bg-[#fdb913] rounded-full"></span>
+      <motion.div 
+        layoutId="nav-bg"
+        className="absolute inset-0 bg-[#004d3d] shadow-[0_8px_16px_rgba(0,77,61,0.25)]"
+        initial={false}
+        transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+      />
+    )}
+    <span className="relative z-10 transition-transform duration-300 group-active:scale-90">
+      {React.cloneElement(icon, { 
+        size: 20, 
+        strokeWidth: active ? 2 : 1.5,
+        className: active ? 'drop-shadow-[0_0_8px_rgba(253,185,19,0.5)]' : ''
+      })}
+    </span>
+    {active && (
+      <motion.span 
+        layoutId="nav-dot"
+        className="absolute bottom-1 w-1 h-1 bg-[#fdb913] rounded-full z-10"
+        transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+      />
     )}
   </button>
 );

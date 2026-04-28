@@ -55,6 +55,7 @@ export interface LegendBio {
 export interface FanZoneHub {
   id: string;
   name: string;
+  activity: string; // New: Specific activity like "Braai & Rugby", "Fan March", etc.
   density: number; // 0-100
   vibe: 'Chill' | 'Singing' | 'High Gees' | 'Family';
   deals: string[];
@@ -64,6 +65,7 @@ export interface FanZoneHub {
   description?: string;
   status?: 'active' | 'paused';
   contactPerson?: string;
+  type: 'venue' | 'activity'; // To distinguish marker icons
 }
 
 export interface AppNotification {
